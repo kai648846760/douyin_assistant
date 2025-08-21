@@ -1,134 +1,116 @@
+# uploader.py
 # -*- coding: utf-8 -*-
 # @Author: Loki Wang
 
 import os
 import time
-from playwright.sync_api import sync_playwright, Page, TimeoutError as PlaywrightTimeoutError
+from playwright.sync_api import sync_playwright, Browser, Page, Playwright, TimeoutError as PlaywrightTimeoutError
 from rich.console import Console
 
 console = Console()
 
 class Uploader:
-    """
-    负责通过模拟浏览器操作上传视频到抖音。
-    【最终稳定版】: 放弃了不可靠的无头模式，回归最稳定的有头模式，确保用户数据能被正确加载和识别。
-    """
+    """负责通过模拟浏览器操作上传视频到抖音 (已重构为会话模式，支持批量上传)"""
 
     def __init__(self, user_data_dir: str):
         self.user_data_dir = os.path.abspath(user_data_dir)
         os.makedirs(self.user_data_dir, exist_ok=True)
-        console.print(f"[bold green]上传器初始化完成。浏览器用户数据目录: {self.user_data_dir}[/bold green]")
+        self.playwright: Playwright = None
+        self.browser: Browser = None
+        print(f"上传器初始化完成。")
 
-    def upload_video(self, video_path: str, title: str, tags: list = None):
-        if not os.path.exists(video_path):
-            console.print(f"[bold red]错误: 视频文件 '{video_path}' 不存在。[/bold red]")
+    def start_session(self) -> Page:
+        """启动Playwright，打开浏览器，并处理一次性登录。返回一个可用的页面对象。"""
+        self.playwright = sync_playwright().start()
+        
+        print("正在启动浏览器...")
+        self.browser = self.playwright.chromium.launch_persistent_context(
+            self.user_data_dir, headless=False, args=['--disable-blink-features=AutomationControlled']
+        )
+        page = self.browser.pages[0] if self.browser.pages else self.browser.new_page()
+        
+        upload_url = "https://creator.douyin.com/creator-micro/content/upload"
+        home_url_fragment = "/creator-micro/home"
+        
+        page.goto(upload_url, wait_until="domcontentloaded", timeout=60000)
+        
+        print("正在检查登录状态或等待您登录...")
+        while True:
+            if page.get_by_role('button', name='上传视频').count() > 0:
+                print("‘上传视频’按钮已找到，您已登录！")
+                break
+            if home_url_fragment in page.url:
+                print(f"检测到已跳转到创作者主页，登录成功！")
+                break
+            print("  [-] 未检测到登录成功信号，等待您扫码登录，5秒后重试...")
+            time.sleep(5)
+        
+        return page
+
+    def upload_single_video(self, page: Page, video_path: str, title: str, tags: list = None) -> bool:
+        """在一个已登录的页面上，执行单个视频的上传逻辑。"""
+        try:
+            print(f"\n>>>>> 开始处理: '{os.path.basename(video_path)}' <<<<<")
+            upload_url = "https://creator.douyin.com/creator-micro/content/upload"
+            if upload_url not in page.url:
+                print("当前不在上传页，正在跳转...")
+                page.goto(upload_url, wait_until="domcontentloaded")
+
+            upload_button = page.get_by_role('button', name='上传视频')
+            upload_button.wait_for(state="visible", timeout=30000)
+            
+            with page.expect_file_chooser() as fc_info:
+                upload_button.click()
+            
+            file_chooser = fc_info.value
+            file_chooser.set_files(video_path)
+            print("  [>] 文件已选择，等待跳转...")
+
+            while True:
+                try: page.wait_for_url("**/creator-micro/content/publish**", timeout=3000); break
+                except PlaywrightTimeoutError:
+                    try: page.wait_for_url("**/creator-micro/content/post/video**", timeout=3000); break
+                    except PlaywrightTimeoutError: time.sleep(0.5)
+            print("  [>] 已进入编辑页面。")
+
+            title_container = page.get_by_text('作品标题').locator("..").locator("xpath=following-sibling::div[1]").locator("input")
+            time.sleep(1)
+            if title_container.count() > 0: title_container.fill(title[:30])
+            else:
+                title_container_v2 = page.locator(".notranslate")
+                title_container_v2.click(); page.keyboard.press("Control+KeyA"); page.keyboard.press("Delete"); page.keyboard.type(title); page.keyboard.press("Enter")
+            
+            if tags:
+                tag_area = page.locator(".zone-container")
+                for tag in tags: tag_area.type("#" + tag); tag_area.press("Space")
+            print("  [>] 标题和标签已填写。")
+
+            while True:
+                if page.locator('[class^="long-card"] div:has-text("重新上传")').count() > 0: break
+                else: time.sleep(2)
+            print("  [>] 视频处理完成。")
+
+            page.get_by_role('button', name="发布", exact=True).click()
+            page.wait_for_url("**/creator-micro/content/manage**", timeout=120000)
+            print("  [✔] 发布成功！")
+            return True
+
+        except Exception as e:
+            error_msg = f"上传 '{os.path.basename(video_path)}' 时发生错误: {e}"
+            print(f"错误: {error_msg}")
+            page.screenshot(path=f"error_{os.path.basename(video_path)}.png")
             return False
+            
+    def upload_video(self, video_path: str, title: str, tags: list = None):
+        """兼容旧的单个上传模式，自包含启动和关闭。"""
+        try:
+            page = self.start_session()
+            return self.upload_single_video(page, video_path, title, tags)
+        finally:
+            self.end_session()
 
-        console.print(f"[bold blue]开始上传任务: '{os.path.basename(video_path)}'[/bold blue]")
-
-        with sync_playwright() as p:
-            console.print("[yellow]正在启动浏览器... (使用有头模式确保登录状态被正确识别)[/yellow]")
-            browser = p.chromium.launch_persistent_context(
-                self.user_data_dir,
-                headless=False, # 永远使用有头模式，这是最可靠的方式
-                args=['--disable-blink-features=AutomationControlled'],
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36"
-            )
-            page = browser.pages[0] if browser.pages else browser.new_page()
-
-            try:
-                # 1. 导航到上传页面
-                upload_url = "https://creator.douyin.com/creator-micro/content/upload"
-                home_url_fragment = "/creator-micro/home"
-                
-                console.print(f"导航到上传页面: {upload_url}")
-                page.goto(upload_url, wait_until="domcontentloaded", timeout=60000)
-
-                # 2. 采用我们最终验证成功的智能等待逻辑
-                console.print("正在检查登录状态或等待您登录...")
-                
-                while True:
-                    # 检查点1：上传按钮是否存在 (说明已经在上传页)
-                    upload_button = page.get_by_role('button', name='上传视频')
-                    if upload_button.count() > 0:
-                        console.print("[bold green]‘上传视频’按钮已找到，您已登录！[/bold green]")
-                        break
-                    
-                    # 检查点2：URL是否已经跳转到主页 (说明登录成功了)
-                    if home_url_fragment in page.url:
-                        console.print(f"[bold green]检测到已跳转到创作者主页，登录成功！[/bold green]")
-                        break
-                    
-                    # 如果两个都不是，说明还在登录页，继续等待
-                    console.print("  [-] 未检测到登录成功信号，正在等待您扫码登录，5秒后重试...")
-                    time.sleep(5)
-                
-                # 3. 确保我们最终在上传页面上
-                if upload_url not in page.url:
-                    console.print(f"当前在主页，正在跳转到上传页面...")
-                    page.goto(upload_url, wait_until="domcontentloaded")
-                    upload_button = page.get_by_role('button', name='上传视频')
-                    upload_button.wait_for(state="visible", timeout=30000)
-
-                # 4. 上传文件
-                console.print(f"准备点击‘上传视频’按钮并选择文件...")
-                with page.expect_file_chooser() as fc_info:
-                    upload_button.click()
-                
-                file_chooser = fc_info.value
-                file_chooser.set_files(video_path)
-                console.print("[bold green]文件已选择。等待页面跳转到视频编辑页...[/bold green]")
-
-                # --- 后续所有流程均与之前最终稳定版相同 ---
-                while True:
-                    try:
-                        page.wait_for_url("**/creator-micro/content/publish**", timeout=3000)
-                        break
-                    except PlaywrightTimeoutError:
-                        try:
-                            page.wait_for_url("**/creator-micro/content/post/video**", timeout=3000)
-                            break
-                        except PlaywrightTimeoutError:
-                            time.sleep(0.5)
-
-                title_container_v1 = page.get_by_text('作品标题').locator("..").locator("xpath=following-sibling::div[1]").locator("input")
-                time.sleep(1)
-                
-                if title_container_v1.count() > 0:
-                    title_container_v1.fill(title[:30])
-                else:
-                    title_container_v2 = page.locator(".notranslate")
-                    title_container_v2.click()
-                    page.keyboard.press("Control+KeyA")
-                    page.keyboard.press("Delete")
-                    page.keyboard.type(title)
-                    page.keyboard.press("Enter")
-
-                if tags:
-                    tag_input_area = page.locator(".zone-container")
-                    for tag in tags:
-                        tag_input_area.type("#" + tag)
-                        tag_input_area.press("Space")
-                
-                while True:
-                    if page.locator('[class^="long-card"] div:has-text("重新上传")').count() > 0:
-                        break
-                    else:
-                        time.sleep(2)
-
-                page.get_by_role('button', name="发布", exact=True).click()
-                
-                page.wait_for_url("**/creator-micro/content/manage**", timeout=120000)
-                console.print("[bold green]视频发布成功！[/bold green]")
-
-                time.sleep(5)
-                browser.close()
-                return True
-
-            except Exception as e:
-                error_msg = f"上传过程中发生未知错误: {e}"
-                console.print(f"[bold red]{error_msg}[/bold red]")
-                page.screenshot(path="upload_error.png")
-                console.print("[bold blue]错误截图已保存为 upload_error.png[/bold blue]")
-                browser.close()
-                return False
+    def end_session(self):
+        """关闭浏览器和Playwright会话。"""
+        if self.browser: self.browser.close()
+        if self.playwright: self.playwright.stop()
+        print("浏览器会话已关闭。")
