@@ -1,4 +1,3 @@
-### **1. 最终版 `README.md` (完整)**
 # 抖音全能助手 (Douyin All-in-One Assistant)
 
 **✨ `uv` Powered ✨**
