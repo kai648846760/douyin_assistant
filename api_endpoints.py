@@ -7,4 +7,5 @@ USER_POST_API = "https://www.douyin.com/aweme/v1/web/aweme/post/"
 # 用户收藏作品列表API
 USER_FAVORITE_API = "https://www.douyin.com/aweme/v1/web/aweme/favorite/"
 
-# 未来可以添加更多API，如点赞列表、合集列表等
+# 【修正】用户合集作品列表API
+USER_COLLECTION_API = "https://www.douyin.com/aweme/v1/web/mix/aweme/"
