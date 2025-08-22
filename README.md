@@ -90,8 +90,16 @@ python gui_main.py
 ```
 然后在图形界面中进行操作：
 - 管理账号：添加账号、更新Cookie
+  <img width="1700" height="1456" alt="image" src="https://github.com/user-attachments/assets/fe408037-2055-4547-bbc6-a87bb3b0eef6" />
+  
 - 下载视频：选择模式、输入URL、开始下载
+  <img width="1700" height="1456" alt="image" src="https://github.com/user-attachments/assets/b9b3bc89-cd46-4b99-be76-eca75890155a" />
+
 - 上传视频：选择视频文件、设置参数、批量上传
+  <img width="1700" height="1456" alt="image" src="https://github.com/user-attachments/assets/5eca4bb3-6801-4775-89a9-4dced0b032fa" />
+
+
+
 
 ## ⚙️ 配置说明
 
