@@ -187,8 +187,13 @@ python main.py list
 3.  **日常使用**:
     *   随时使用 `download` 命令下载视频。如果Cookie失效，重新执行 `cookie` 命令即可。
     *   使用 `upload` 或 `batch-upload` 并指定账号名，即可**免登录全自动发布**视频。
-
 ---
+## 新增GUI使用方式
+```python
+python gui.py
+```
+<img width="1700" height="1456" alt="image" src="https://github.com/user-attachments/assets/c35fb830-1a45-487b-b3e0-0fdf0a3838c6" />
+
 
 ## ❓ 常见问题 (Troubleshooting)
 
@@ -202,6 +207,8 @@ python main.py list
     *   检查 `browser-cookie3` 库是否为最新版本 (`uv pip install -U browser-cookie3`)。
 
 ---
+
+
 
 ## 协议
 
