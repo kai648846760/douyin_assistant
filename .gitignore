@@ -1,13 +1,5 @@
-# Python-generated files
-__pycache__/
-*.py[oc]
-build/
-dist/
-wheels/
 browser_data/
+.venv/
+__pycache__/
 downloads/
-*.egg-info
-
-# Virtual environments
-.venv
 accounts.json

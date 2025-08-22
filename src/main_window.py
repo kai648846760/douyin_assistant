@@ -21,11 +21,16 @@ class Stream(QObject):
         pass
 
 class MainWindow(QMainWindow):
-    # 【回滚】只包含我们最终验证成功的、稳定可用的下载模式
+    # 【修正】使用与F2项目一致的模式名称，按用户期望的顺序排列
     DOWNLOAD_MODES = {
         "主页作品": "post",
-        "我的收藏": "favorite",
-        "合集作品": "collection",
+        "点赞作品": "like",
+        "收藏作品": "collection",  # 需要登录
+        "收藏夹作品": "collects",
+        "收藏音乐": "music",  # 需要--lyric参数
+        "合集作品": "mix",
+        "直播下载": "live",
+        "单个视频": "one",  # 有Bug，放在最后
     }
     
     def __init__(self):
@@ -83,18 +88,36 @@ class MainWindow(QMainWindow):
 
     def on_task_finished(self, msg_type, message):
         """任务完成后的回调函数"""
-        if msg_type == "success":
-            QMessageBox.information(self, "成功", message)
-            self.refresh_accounts() # 任务成功后刷新账号列表
-        else:
-            QMessageBox.critical(self, "失败", message)
-        
-        # 重新启用所有可能被禁用的按钮
-        self.update_cookie_button.setEnabled(True)
-        self.download_button.setEnabled(True)
-        self.upload_button.setEnabled(True)
-        self.thread.quit()
-        self.thread.wait()
+        try:
+            if msg_type == "success":
+                QMessageBox.information(self, "成功", message)
+                self.refresh_accounts() # 任务成功后刷新账号列表
+            elif msg_type == "error":
+                QMessageBox.critical(self, "失败", message)
+            elif msg_type == "info":
+                # 信息消息，不显示弹窗，只记录到日志
+                self.append_log(f"信息: {message}")
+
+            # 重新启用所有可能被禁用的按钮
+            self.update_cookie_button.setEnabled(True)
+            self.download_button.setEnabled(True)
+            self.stop_download_button.setEnabled(False)
+            self.upload_button.setEnabled(True)
+
+            # 安全地终止线程
+            if self.thread.isRunning():
+                self.thread.quit()
+                if not self.thread.wait(5000):  # 等待最多5秒
+                    self.append_log("警告: 线程未能正常终止")
+                    self.thread.terminate()  # 强制终止
+
+        except Exception as e:
+            self.append_log(f"任务完成处理时发生错误: {e}")
+            # 确保按钮状态正确
+            self.update_cookie_button.setEnabled(True)
+            self.download_button.setEnabled(True)
+            self.stop_download_button.setEnabled(False)
+            self.upload_button.setEnabled(True)
 
     # ----------------- Tab页创建函数 -----------------
 
@@ -149,7 +172,8 @@ class MainWindow(QMainWindow):
         self.download_mode_combo = QComboBox()
         self.download_mode_combo.addItems(self.DOWNLOAD_MODES.keys())
         self.download_url_line = QLineEdit()
-        self.download_url_line.setPlaceholderText("下载主页或合集时，请在此粘贴URL")
+        # URL提示语会根据选择的模式动态设置
+        self.download_url_line.setPlaceholderText("")
         
         path_layout = QHBoxLayout()
         self.download_path_line = QLineEdit()
@@ -159,7 +183,14 @@ class MainWindow(QMainWindow):
         path_layout.addWidget(browse_path_button)
 
         self.download_button = QPushButton("开始下载")
-        
+        self.stop_download_button = QPushButton("停止下载")
+        self.stop_download_button.setEnabled(False)
+
+        # 下载按钮布局
+        button_layout = QHBoxLayout()
+        button_layout.addWidget(self.download_button)
+        button_layout.addWidget(self.stop_download_button)
+
         form_layout = QVBoxLayout()
         form_layout.addWidget(QLabel("选择下载账号 (仅显示Cookie可用的账号):"))
         form_layout.addWidget(self.download_account_combo)
@@ -169,15 +200,16 @@ class MainWindow(QMainWindow):
         form_layout.addWidget(self.download_url_line)
         form_layout.addWidget(QLabel("自定义保存路径 (可选):"))
         form_layout.addLayout(path_layout)
-        
+
         layout.addLayout(form_layout)
-        layout.addWidget(self.download_button, alignment=Qt.AlignCenter)
+        layout.addLayout(button_layout)
         layout.addStretch()
         
         # 连接信号
         self.download_mode_combo.currentTextChanged.connect(self.toggle_download_url_input)
         browse_path_button.clicked.connect(self.browse_download_path)
         self.download_button.clicked.connect(self.start_download)
+        self.stop_download_button.clicked.connect(self.stop_download)
         
         self.tabs.addTab(tab, "② 视频下载")
         self.toggle_download_url_input(self.download_mode_combo.currentText())
@@ -210,6 +242,7 @@ class MainWindow(QMainWindow):
         self.upload_button.clicked.connect(self.start_upload)
         
         self.tabs.addTab(tab, "③ 视频上传")
+
 
     # ----------------- 逻辑和槽函数 -----------------
 
@@ -291,9 +324,34 @@ class MainWindow(QMainWindow):
             self.download_path_line.setText(path)
 
     def toggle_download_url_input(self, mode_text):
-        """根据下载模式决定URL输入框是否可用"""
+        """根据下载模式决定URL输入框是否可用和提示语"""
         mode = self.DOWNLOAD_MODES.get(mode_text)
-        self.download_url_line.setEnabled(mode not in ['favorite'])
+        # 所有模式都需要URL输入 (用于获取sec_user_id创建文件夹)
+        url_required_modes = ['post', 'like', 'collection', 'collects', 'mix', 'music', 'one', 'live']
+        is_enabled = mode in url_required_modes
+        self.download_url_line.setEnabled(is_enabled)
+
+        # 根据模式设置不同的提示语
+        if mode == 'post':
+            placeholder = "请输入用户主页URL (例如: https://www.douyin.com/user/MS4wLjABAAAA...)"
+        elif mode == 'like':
+            placeholder = "请输入用户主页URL (例如: https://www.douyin.com/user/MS4wLjABAAAA...)"
+        elif mode == 'collection':
+            placeholder = "请输入用户主页URL (例如: https://www.douyin.com/user/MS4wLjABAAAA...)"
+        elif mode == 'collects':
+            placeholder = "请输入收藏夹URL (例如: https://www.douyin.com/collection/123456789)"
+        elif mode == 'mix':
+            placeholder = "请输入合集URL或合集中作品URL (例如: https://www.douyin.com/mix/123456789)"
+        elif mode == 'music':
+            placeholder = "请输入音乐作品URL (例如: https://www.douyin.com/music/123456789)"
+        elif mode == 'live':
+            placeholder = "请输入直播间URL (例如: https://live.douyin.com/123456789)"
+        elif mode == 'one':
+            placeholder = "请输入单个视频URL (例如: https://www.douyin.com/video/123456789)"
+        else:
+            placeholder = ""
+
+        self.download_url_line.setPlaceholderText(placeholder)
 
     def start_download(self):
         """启动下载任务"""
@@ -306,16 +364,20 @@ class MainWindow(QMainWindow):
         if not account or account == "无可用账号":
             QMessageBox.warning(self, "警告", "请选择一个有效账号！")
             return
-        if mode not in ['favorite'] and not url:
-            QMessageBox.warning(self, "警告", "此模式需要填写目标URL！")
+
+        # 检查需要URL的模式 (所有模式都需要URL用于获取sec_user_id)
+        url_required_modes = ['post', 'like', 'collection', 'collects', 'mix', 'music', 'one', 'live']
+        if mode in url_required_modes and not url:
+            QMessageBox.warning(self, "警告", f"模式 '{mode_text}' 需要填写目标URL！")
             return
 
         self.download_button.setEnabled(False)
+        self.stop_download_button.setEnabled(True)
         self.log_output.clear()
         if self.thread.isRunning():
             self.thread.quit()
             self.thread.wait()
-        
+
         self.worker.task = lambda: self.worker.run_download(account, mode, url, path)
         self.thread.start()
 
@@ -353,6 +415,19 @@ class MainWindow(QMainWindow):
         
         self.worker.task = lambda: self.worker.run_batch_upload(account, selected_videos, tags)
         self.thread.start()
+
+    def stop_download(self):
+        """停止下载任务"""
+        try:
+            if self.worker and hasattr(self.worker, 'is_stopping') and not self.worker.is_stopping:
+                self.worker.stop_download()
+                self.stop_download_button.setEnabled(False)
+                self.append_log("已发送停止下载请求...")
+            else:
+                self.append_log("没有正在运行的任务或任务已在停止中...")
+        except Exception as e:
+            self.append_log(f"停止下载时发生错误: {e}")
+            self.stop_download_button.setEnabled(False)
 
     def closeEvent(self, event):
         """关闭窗口时确保后台线程也退出"""

@@ -18,11 +18,25 @@ class Worker(QObject):
         super().__init__()
         self.account_manager = AccountManager()
         self.task = None
+        self.is_stopping = False
+        self.current_thread = None
 
     def run(self):
         if self.task:
-            try: self.task()
-            except Exception as e: self.finished.emit("error", f"任务执行时发生异常: {e}")
+            try:
+                self.is_stopping = False
+                self.task()
+            except Exception as e:
+                if not self.is_stopping:
+                    self.finished.emit("error", f"任务执行时发生异常: {e}")
+
+    def stop_download(self):
+        """停止当前下载任务"""
+        self.is_stopping = True
+        # 如果downloader存在，设置停止标志
+        if hasattr(self, '_current_downloader') and self._current_downloader:
+            self._current_downloader._stop_requested = True
+        self.finished.emit("info", "正在停止下载任务...")
 
     def run_update_cookie(self, account, browser_name):
         try:
@@ -35,20 +49,43 @@ class Worker(QObject):
         account_info = self.account_manager.get_account(account)
         if not account_info or not account_info.get('cookie'):
             self.finished.emit("error", f"账号 '{account}' 不存在或Cookie未配置。"); return
-        
+
         downloader = Downloader(account_info['cookie'], download_path)
-        
-        # 根据mode调用不同的下载方法
-        if mode == 'one': downloader.download_from_url(url)
-        elif mode == 'post': downloader.download_from_post(url)
-        elif mode == 'like': downloader.download_from_like(url)
-        elif mode == 'favorite': downloader.download_from_favorite()
-        elif mode == 'collects': downloader.download_from_collects(url)
-        elif mode == 'mix': downloader.download_from_mix(url)
-        elif mode == 'music': downloader.download_from_music(url)
-        elif mode == 'live': downloader.download_live(url)
-        
-        self.finished.emit("success", f"下载任务已完成。")
+        self._current_downloader = downloader  # 保存引用以便停止
+
+        try:
+            # 检查是否停止
+            if self.is_stopping:
+                self.finished.emit("info", "下载任务已被用户取消")
+                return
+
+            # 根据mode调用不同的下载方法
+            if mode == 'one':
+                downloader.download_from_url(url)
+            elif mode == 'post':
+                downloader.download_from_post(url)
+            elif mode == 'like':
+                downloader.download_from_like(url)
+            elif mode == 'collection':
+                downloader.download_from_favorite()  # collection模式需要登录，使用favorite方法
+            elif mode == 'collects':
+                downloader.download_from_collects(url)
+            elif mode == 'mix':
+                downloader.download_from_mix(url)
+            elif mode == 'music':
+                downloader.download_from_music(url)
+            elif mode == 'live':
+                downloader.download_live(url)
+
+            # 再次检查是否停止
+            if not self.is_stopping:
+                self.finished.emit("success", f"下载任务已完成。")
+
+        except Exception as e:
+            if not self.is_stopping:
+                self.finished.emit("error", f"下载过程中发生错误: {e}")
+            else:
+                self.finished.emit("info", f"下载任务被取消: {e}")
 
     def run_upload(self, account, video_path, title, tags):
         """执行单个视频上传任务"""

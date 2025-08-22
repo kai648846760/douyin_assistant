@@ -4,13 +4,38 @@
 
 import json
 import browser_cookie3
+import os
+from pathlib import Path
 from typing import List, Dict, Optional
 
 class AccountManager:
     """负责管理和读取 accounts.json 文件中的账号信息"""
-    def __init__(self, file_path: str = 'accounts.json'):
-        self.file_path = file_path
+    def __init__(self, file_path: str = None):
+        if file_path is None:
+            # 动态查找accounts.json文件
+            self.file_path = self._find_accounts_file()
+        else:
+            self.file_path = file_path
         self.accounts = self._load_accounts()
+
+    def _find_accounts_file(self) -> str:
+        """查找accounts.json文件，支持多个可能的位置"""
+        # 优先查找的路径
+        possible_paths = [
+            'accounts.json',  # 根目录
+            'config/accounts.json',  # config目录
+            './accounts.json',
+            './config/accounts.json'
+        ]
+
+        for path in possible_paths:
+            if os.path.exists(path):
+                print(f"找到账号配置文件: {path}")
+                return path
+
+        # 如果都没有找到，默认在根目录创建
+        print("未找到账号配置文件，将在根目录创建新的accounts.json")
+        return 'accounts.json'
 
     def _load_accounts(self) -> List[Dict]:
         try:
