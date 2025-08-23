@@ -99,33 +99,63 @@ class Worker(QObject):
         if success: self.finished.emit("success", f"视频 '{os.path.basename(video_path)}' 上传成功！")
         else: self.finished.emit("error", "上传失败，详情请查看日志。")
 
-    def run_batch_upload(self, account, video_list, common_tags):
-        """执行批量上传任务 (只启动一次浏览器)"""
-        account_info = self.account_manager.get_account(account)
-        if not account_info:
-            self.finished.emit("error", f"账号 '{account}' 不存在。"); return
+    def run_batch_upload(self, accounts, video_list, common_tags):
+        """执行批量上传任务 (支持多账号)"""
+        # 确保accounts是列表格式
+        if isinstance(accounts, str):
+            accounts = [accounts]
 
-        uploader = Uploader(account_info['user_data_dir'])
-        success_count, fail_count = 0, 0
-        
-        try:
-            page = uploader.start_session()
-            for i, video_path in enumerate(video_list):
-                base_name = os.path.splitext(os.path.basename(video_path))[0]
-                parts = base_name.split('#'); video_title = parts[0].strip()
-                filename_tags = [tag.strip() for tag in parts[1:] if tag.strip()]
-                final_tags = common_tags + filename_tags
+        if not accounts:
+            self.finished.emit("error", "未选择任何有效账号。"); return
 
-                success = uploader.upload_single_video(page, video_path, video_title, final_tags)
-                if success: success_count += 1
-                else: fail_count += 1
-                
-                if i < len(video_list) - 1:
-                    self.progress.emit("\n暂停10秒，准备下一个任务...\n"); time.sleep(10)
-            
-            summary = f"批量任务完成！成功: {success_count}, 失败: {fail_count}"
-            self.finished.emit("success", summary)
-        except Exception as e:
-            self.finished.emit("error", f"批量上传过程中发生严重错误: {e}")
-        finally:
-            uploader.end_session()
+        total_success, total_fail = 0, 0
+
+        # 对每个账号执行上传任务
+        for account in accounts:
+            account_info = self.account_manager.get_account(account)
+            if not account_info:
+                self.progress.emit(f"账号 '{account}' 不存在，跳过。")
+                continue
+
+            self.progress.emit(f"正在为账号 '{account}' 执行上传任务...")
+            uploader = Uploader(account_info['user_data_dir'])
+            success_count, fail_count = 0, 0
+
+            try:
+                page = uploader.start_session()
+                for i, video_path in enumerate(video_list):
+                    if self.is_stopping:
+                        self.progress.emit("上传任务已被用户取消")
+                        break
+
+                    base_name = os.path.splitext(os.path.basename(video_path))[0]
+                    parts = base_name.split('#'); video_title = parts[0].strip()
+                    filename_tags = [tag.strip() for tag in parts[1:] if tag.strip()]
+                    final_tags = common_tags + filename_tags
+
+                    success = uploader.upload_single_video(page, video_path, video_title, final_tags)
+                    if success: success_count += 1
+                    else: fail_count += 1
+
+                    if i < len(video_list) - 1:
+                        self.progress.emit(f"账号 '{account}': 暂停10秒，准备下一个视频...\n"); time.sleep(10)
+
+                total_success += success_count
+                total_fail += fail_count
+
+                if success_count > 0 or fail_count > 0:
+                    self.progress.emit(f"账号 '{account}' 完成！成功: {success_count}, 失败: {fail_count}")
+
+            except Exception as e:
+                self.progress.emit(f"账号 '{account}' 上传过程中发生错误: {e}")
+                total_fail += len(video_list) - success_count
+            finally:
+                uploader.end_session()
+
+            # 在不同账号间添加间隔
+            if account != accounts[-1]:  # 不是最后一个账号
+                self.progress.emit(f"\n切换到下一个账号，暂停15秒...\n")
+                time.sleep(15)
+
+        summary = f"多账号批量任务完成！总成功: {total_success}, 总失败: {total_fail}"
+        self.finished.emit("success", summary)

@@ -217,30 +217,31 @@ class MainWindow(QMainWindow):
     def create_upload_tab(self):
         tab = QWidget()
         layout = QVBoxLayout(tab)
-        
-        self.upload_account_combo = QComboBox()
+
+        self.upload_account_list = QListWidget()
+        self.upload_account_list.setSelectionMode(QListWidget.MultiSelection)  # 允许多选
         browse_dir_button = QPushButton("浏览并加载视频...")
         self.video_list_widget = QListWidget()
         self.common_tags_line = QLineEdit()
         self.common_tags_line.setPlaceholderText("为本次上传的所有视频都添加的通用标签, e.g., 原创,教程")
         self.upload_button = QPushButton("开始上传选中的视频")
-        
+
         form_layout = QVBoxLayout()
-        form_layout.addWidget(QLabel("选择上传账号 (仅显示上传配置可用的账号):"))
-        form_layout.addWidget(self.upload_account_combo)
+        form_layout.addWidget(QLabel("选择上传账号 (可多选，显示配置中的所有账号):"))
+        form_layout.addWidget(self.upload_account_list)
         form_layout.addWidget(browse_dir_button)
         form_layout.addWidget(QLabel("请勾选需要上传的视频 (文件名格式: 标题 #标签1 #标签2.mp4):"))
         form_layout.addWidget(self.video_list_widget)
         form_layout.addWidget(QLabel("通用话题标签 (可选):"))
         form_layout.addWidget(self.common_tags_line)
-        
+
         layout.addLayout(form_layout)
         layout.addWidget(self.upload_button, alignment=Qt.AlignCenter)
-        
+
         # 连接信号
         browse_dir_button.clicked.connect(self.browse_and_list_videos)
         self.upload_button.clicked.connect(self.start_upload)
-        
+
         self.tabs.addTab(tab, "③ 视频上传")
 
 
@@ -266,15 +267,29 @@ class MainWindow(QMainWindow):
 
         for acc in accounts:
             status = []
+
+            # 下载状态
             if acc.get('cookie'):
                 status.append("[下载可用]")
                 downloadable_accounts.append(acc['username'])
-            
+            else:
+                status.append("[下载需配置]")
+
+            # 上传状态 - 使用新的判断逻辑
             user_data_dir = acc.get('user_data_dir')
             if user_data_dir and os.path.isdir(user_data_dir):
-                status.append("[上传可用]")
-                uploadable_accounts.append(acc['username'])
-            
+                try:
+                    if os.listdir(user_data_dir):
+                        status.append("[上传已配置]")
+                    else:
+                        status.append("[上传目录为空]")
+                    uploadable_accounts.append(acc['username'])
+                except Exception:
+                    status.append("[上传目录为空]")
+                    uploadable_accounts.append(acc['username'])
+            else:
+                status.append("[上传需配置]")
+
             self.account_list_text.append(f"用户: {acc.get('username')} | 备注: {acc.get('remark', '无')} | 状态: {' '.join(status) if status else '[配置不完整]'}")
         
         # 更新Cookie的下拉框，显示所有账号
@@ -284,8 +299,38 @@ class MainWindow(QMainWindow):
         # 其他下拉框保持过滤逻辑
         self.download_account_combo.clear()
         self.download_account_combo.addItems(downloadable_accounts if downloadable_accounts else ["无可用账号"])
-        self.upload_account_combo.clear()
-        self.upload_account_combo.addItems(uploadable_accounts if uploadable_accounts else ["无可用账号"])
+
+        # 更新上传账号多选列表，显示所有账号（包括没有上传配置的）
+        self.upload_account_list.clear()
+        if all_account_names:
+            for username in all_account_names:
+                # 检查是否有上传配置，添加状态提示
+                account_info = self.account_manager.get_account(username)
+                user_data_dir = account_info.get('user_data_dir') if account_info else None
+
+                if user_data_dir and os.path.isdir(user_data_dir):
+                    # 检查目录是否为空
+                    try:
+                        if os.listdir(user_data_dir):
+                            display_text = f"{username} [已配置]"
+                        else:
+                            display_text = f"{username} [目录为空]"
+                    except Exception:
+                        display_text = f"{username} [目录为空]"
+                else:
+                    display_text = f"{username} [需配置上传]"
+
+                item = QListWidgetItem(display_text)
+                item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+                item.setCheckState(Qt.Unchecked)  # 默认不选中
+                # 使用setData存储用户名，注意要确保username是字符串
+                if isinstance(username, str):
+                    item.setData(Qt.UserRole, username)
+                self.upload_account_list.addItem(item)
+        else:
+            item = QListWidgetItem("无账号")
+            item.setFlags(item.flags() & ~Qt.ItemIsEnabled)  # 禁用项
+            self.upload_account_list.addItem(item)
 
     def add_account(self):
         """添加新账号"""
@@ -397,23 +442,100 @@ class MainWindow(QMainWindow):
 
     def start_upload(self):
         """启动批量上传任务"""
-        account = self.upload_account_combo.currentText()
+        # 获取所有选中的账号
+        selected_accounts = []
+        unconfigured_accounts = []
+
+        for i in range(self.upload_account_list.count()):
+            item = self.upload_account_list.item(i)
+            if item and item.checkState() == Qt.Checked:
+                username = item.data(Qt.UserRole)
+                if username and isinstance(username, str) and username != "无账号":
+                    selected_accounts.append(username)
+
+                    # 检查账号配置状态
+                    account_info = self.account_manager.get_account(username)
+                    user_data_dir = account_info.get('user_data_dir') if account_info else None
+
+                    # 只有当目录不存在时才算未配置
+                    if not user_data_dir or not os.path.isdir(user_data_dir):
+                        unconfigured_accounts.append(username)
+                    # 如果目录存在但为空，不算未配置，允许继续操作
+
+        if not selected_accounts:
+            QMessageBox.warning(self, "警告", "请选择至少一个有效账号！")
+            return
+
+        # 处理未配置的账号
+        configured_accounts = [acc for acc in selected_accounts if acc not in unconfigured_accounts]
+
+        if unconfigured_accounts and not configured_accounts:
+            # 所有选中的账号都未配置
+            unconfigured_str = "、".join(unconfigured_accounts)
+            reply = QMessageBox.question(
+                self, "账号配置提醒",
+                f"选中的账号都未配置上传功能：{unconfigured_str}\n\n"
+                "是否要先配置这些账号的上传设置？",
+                QMessageBox.Yes | QMessageBox.No
+            )
+
+            if reply == QMessageBox.Yes:
+                # 跳转到账号管理页面
+                self.tabs.setCurrentIndex(0)  # 切换到账号管理Tab
+                QMessageBox.information(self, "提示",
+                    f"请在账号管理页面为以下账号配置 user_data_dir 路径：\n{unconfigured_str}\n\n"
+                    "配置完成后，请重新尝试上传。")
+                return
+            else:
+                return  # 用户选择不配置，直接返回
+
+        elif unconfigured_accounts and configured_accounts:
+            # 部分账号已配置，部分未配置
+            unconfigured_str = "、".join(unconfigured_accounts)
+            configured_str = "、".join(configured_accounts)
+            reply = QMessageBox.question(
+                self, "账号配置提醒",
+                f"已配置账号：{configured_str}\n"
+                f"未配置账号：{unconfigured_str}\n\n"
+                "是否要先配置未配置的账号？\n"
+                "(选择'是'将跳转到配置页面，选择'否'将只使用已配置账号上传)",
+                QMessageBox.Yes | QMessageBox.No
+            )
+
+            if reply == QMessageBox.Yes:
+                # 跳转到账号管理页面
+                self.tabs.setCurrentIndex(0)
+                QMessageBox.information(self, "提示",
+                    f"请配置以下账号：\n{unconfigured_str}\n\n"
+                    "配置完成后，请重新尝试上传。")
+                return
+
+            # 用户选择跳过未配置的账号，只使用已配置的
+            selected_accounts = configured_accounts
+
+        # 继续使用已配置的账号进行上传
+
+        if not selected_accounts:
+            QMessageBox.warning(self, "警告", "没有可用的上传账号！")
+            return
+
         common_tags_str = self.common_tags_line.text()
         selected_videos = [self.video_list_widget.item(i).data(Qt.UserRole) for i in range(self.video_list_widget.count()) if self.video_list_widget.item(i).checkState() == Qt.Checked]
 
-        if not account or account == "无可用账号" or not selected_videos:
-            QMessageBox.warning(self, "警告", "请选择有效账号和至少一个视频！")
+        if not selected_videos:
+            QMessageBox.warning(self, "警告", "请选择至少一个视频！")
             return
 
         self.upload_button.setEnabled(False)
         self.log_output.clear()
-        
+
         tags = [t.strip() for t in common_tags_str.split(',') if t.strip()]
         if self.thread.isRunning():
             self.thread.quit()
             self.thread.wait()
-        
-        self.worker.task = lambda: self.worker.run_batch_upload(account, selected_videos, tags)
+
+        # 传递多个账号进行批量上传
+        self.worker.task = lambda: self.worker.run_batch_upload(selected_accounts, selected_videos, tags)
         self.thread.start()
 
     def stop_download(self):

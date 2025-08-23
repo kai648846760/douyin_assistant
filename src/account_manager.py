@@ -71,12 +71,22 @@ class AccountManager:
 
     def add_account(self, username: str, remark: str = ""):
         if self.get_account(username): print(f"错误：用户名为 '{username}' 的账号已存在。"); return
-        
+
         safe_username = username.replace(' ', '_').replace('.', '')
-        new_account = {"username": username, "cookie": "", "user_data_dir": f"./browser_data/{safe_username}", "remark": remark}
+        user_data_dir = f"./browser_data/{safe_username}"
+
+        # 自动创建用户数据目录
+        try:
+            os.makedirs(user_data_dir, exist_ok=True)
+            print(f"已创建用户数据目录: {user_data_dir}")
+        except Exception as e:
+            print(f"警告：创建用户数据目录失败: {e}")
+            # 即使创建目录失败，也继续添加账号
+
+        new_account = {"username": username, "cookie": "", "user_data_dir": user_data_dir, "remark": remark}
         self.accounts.append(new_account)
         self._save_accounts()
-        print(f"成功添加新账号 '{username}'。")
+        print(f"成功添加新账号 '{username}'，并自动创建了数据目录。")
 
     def update_cookie_from_browser(self, username: str, browser_name: str):
         account = self.get_account(username)
