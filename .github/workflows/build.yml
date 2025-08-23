@@ -11,6 +11,10 @@ on:
         required: true
         default: 'v1.0.0'
 
+permissions:
+  contents: write
+  packages: write
+
 jobs:
   build:
     strategy:
@@ -101,6 +105,7 @@ jobs:
         path: |
           dist/douyou_assistant${{ matrix.ext }}
           version.txt
+        if-no-files-found: error
 
   release:
     needs: build
@@ -110,14 +115,19 @@ jobs:
     steps:
     - name: Download all artifacts
       uses: actions/download-artifact@v4
+      with:
+        path: ./artifacts
+
+    - name: Display structure of downloaded files
+      run: ls -la ./artifacts/
 
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
         files: |
-          douyou_assistant-windows/douyou_assistant.exe
-          douyou_assistant-linux/douyou_assistant
-          douyou_assistant-macos/douyou_assistant
+          ./artifacts/douyou_assistant-windows/douyou_assistant.exe
+          ./artifacts/douyou_assistant-linux/douyou_assistant
+          ./artifacts/douyou_assistant-macos/douyou_assistant
         generate_release_notes: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
