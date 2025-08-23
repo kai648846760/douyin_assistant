@@ -60,7 +60,7 @@ jobs:
       run: |
         pyinstaller --name="douyou_assistant" \
                    --windowed \
-                   --onefile \
+                   --onedir \
                    --icon=icon.ico \
                    --add-data="src:src" \
                    --add-data="config:config" \
@@ -71,9 +71,13 @@ jobs:
                    --hidden-import=PySide6.QtPrintSupport \
                    --hidden-import=PySide6.QtWebEngineCore \
                    --hidden-import=PySide6.QtWebEngineWidgets \
+                   --hidden-import=PySide6.QtWebEngine \
+                   --hidden-import=PySide6.QtOpenGL \
                    --hidden-import=playwright \
                    --hidden-import=playwright.sync_api \
                    --hidden-import=playwright.async_api \
+                   --hidden-import=playwright._impl \
+                   --hidden-import=playwright._api \
                    --hidden-import=src.worker \
                    --hidden-import=src.account_manager \
                    --hidden-import=src.downloader \
@@ -90,9 +94,17 @@ jobs:
                    --hidden-import=os \
                    --hidden-import=sys \
                    --hidden-import=time \
-                   --collect-all playwright \
-                   --collect-all PySide6 \
-                   --no-symlinks \
+                   --hidden-import=threading \
+                   --hidden-import=queue \
+                   --hidden-import=urllib \
+                   --collect-submodules playwright \
+                   --collect-submodules PySide6 \
+                   --collect-data playwright \
+                   --collect-data PySide6 \
+                   --collect-binaries playwright \
+                   --collect-binaries PySide6 \
+                   --recursive-copy-metadata playwright \
+                   --recursive-copy-metadata PySide6 \
                    gui_main.py
 
     - name: Create version info
