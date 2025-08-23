@@ -3,3 +3,4 @@ playwright
 rich
 browser-cookie3
 PySide6
+pathlib
