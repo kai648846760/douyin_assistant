@@ -55,9 +55,11 @@ jobs:
         playwright install-deps
 
     - name: Clean Qt duplicates before build
+      shell: bash
       run: rm -rf dist build && python -m pip uninstall -y PySide6-Essentials 2>/dev/null || true
     
     - name: Upgrade PyInstaller and clean cache
+      shell: bash
       run: |
         python -m pip install -U "pyinstaller>=6.6,<7"
         rm -rf dist build __pycache__ *.spec
@@ -76,6 +78,9 @@ jobs:
                    --hidden-import PySide6.QtGui \
                    --hidden-import playwright \
                    --hidden-import playwright.sync_api \
+                   --hidden-import playwright.async_api \
+                   --hidden-import playwright._impl \
+                   --hidden-import playwright._api \
                    --hidden-import src.worker \
                    --hidden-import src.account_manager \
                    --hidden-import src.downloader \
