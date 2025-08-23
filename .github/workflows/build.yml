@@ -216,19 +216,43 @@ jobs:
           fi
         fi
 
-    - name: Create distribution archive
+    - name: Code sign macOS app (ad-hoc)
+      if: runner.os == 'macOS'
       shell: bash
       run: |
-        # 创建分发压缩包
-        if [ "$RUNNER_OS" == "Windows" ]; then
-          cd dist
-          zip -r "../douyou_assistant-${{ matrix.platform }}.zip" douyou_assistant/
-          cd ..
+        # 对macOS应用进行ad-hoc代码签名以避免"已损坏"错误
+        echo "Signing macOS application..."
+        if [ -d "dist/douyou_assistant.app" ]; then
+          # 签名.app包
+          codesign --force --deep --sign - "dist/douyou_assistant.app"
+          echo "✓ .app bundle signed successfully"
+          # 验证签名
+          codesign --verify --verbose "dist/douyou_assistant.app" || echo "Warning: Signature verification failed"
+        elif [ -f "dist/douyou_assistant/douyou_assistant" ]; then
+          # 签名可执行文件
+          codesign --force --sign - "dist/douyou_assistant/douyou_assistant"
+          echo "✓ Executable signed successfully"
+          # 验证签名
+          codesign --verify --verbose "dist/douyou_assistant/douyou_assistant" || echo "Warning: Signature verification failed"
         else
-          cd dist
-          tar -czf "../douyou_assistant-${{ matrix.platform }}.tar.gz" douyou_assistant/
-          cd ..
+          echo "Warning: No macOS application found to sign"
         fi
+
+    - name: Create distribution archive (Windows)
+      if: runner.os == 'Windows'
+      shell: powershell
+      run: |
+        # 使用PowerShell创建Windows压缩包
+        Compress-Archive -Path "dist/douyou_assistant" -DestinationPath "douyou_assistant-${{ matrix.platform }}.zip" -Force
+        
+    - name: Create distribution archive (macOS)
+      if: runner.os == 'macOS'
+      shell: bash
+      run: |
+        # 创建macOS压缩包
+        cd dist
+        tar -czf "../douyou_assistant-${{ matrix.platform }}.tar.gz" douyou_assistant.app
+        cd ..
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
