@@ -59,7 +59,6 @@
 
 - **Windows**: `douyou_assistant.exe`
 - **macOS**: `douyou_assistant`
-- **Linux**: `douyou_assistant`
 
 ### 触发自动构建
 
@@ -81,7 +80,6 @@ git push origin v1.0.0
 
 - 🖥️ **Windows** (x64)
 - 🍎 **macOS** (x64/ARM64)
-- 🐧 **Linux** (x64)
 
 ### 依赖说明
 
