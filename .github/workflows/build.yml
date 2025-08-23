@@ -63,7 +63,27 @@ jobs:
         rm -rf dist build __pycache__ *.spec
     
     - name: Create executable (force clean)
-      run: pyinstaller --clean --name douyou_assistant --windowed --onedir --icon icon.ico --collect-all playwright --collect-all PySide6 --add-data src:src gui_main.py
+      run: |
+        pyinstaller --clean \
+                   --name douyou_assistant \
+                   --windowed \
+                   --onedir \
+                   --icon icon.ico \
+                   --add-data src:src \
+                   --add-data config:config \
+                   --hidden-import PySide6.QtCore \
+                   --hidden-import PySide6.QtWidgets \
+                   --hidden-import PySide6.QtGui \
+                   --hidden-import playwright \
+                   --hidden-import playwright.sync_api \
+                   --hidden-import src.worker \
+                   --hidden-import src.account_manager \
+                   --hidden-import src.downloader \
+                   --hidden-import src.uploader \
+                   --hidden-import requests \
+                   --hidden-import rich \
+                   --hidden-import browser_cookie3 \
+                   gui_main.py
 
     - name: Create version info
       run: |
