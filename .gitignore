@@ -3,3 +3,8 @@ browser_data/
 __pycache__/
 downloads/
 accounts.json
+
+# Build artifacts
+dist/
+build/
+*.spec
