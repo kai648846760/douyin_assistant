@@ -58,13 +58,34 @@ jobs:
                    --windowed \
                    --onefile \
                    --icon=icon.ico \
+                   --add-data="src:src" \
                    --add-data="config:config" \
                    --hidden-import=PySide6.QtCore \
                    --hidden-import=PySide6.QtWidgets \
                    --hidden-import=PySide6.QtGui \
+                   --hidden-import=PySide6.QtNetwork \
+                   --hidden-import=PySide6.QtPrintSupport \
                    --hidden-import=playwright \
                    --hidden-import=playwright.sync_api \
+                   --hidden-import=playwright.async_api \
+                   --hidden-import=src.worker \
+                   --hidden-import=src.account_manager \
+                   --hidden-import=src.downloader \
+                   --hidden-import=src.uploader \
+                   --hidden-import=src.api_endpoints \
+                   --hidden-import=src.xbogus \
+                   --hidden-import=src.main \
+                   --hidden-import=src.gui \
+                   --hidden-import=requests \
+                   --hidden-import=rich \
+                   --hidden-import=browser_cookie3 \
+                   --hidden-import=json \
+                   --hidden-import=pathlib \
+                   --hidden-import=os \
+                   --hidden-import=sys \
+                   --hidden-import=time \
                    --collect-all playwright \
+                   --collect-all PySide6 \
                    gui_main.py
 
     - name: Create version info

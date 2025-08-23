@@ -6,9 +6,9 @@
 import os
 import time
 from PySide6.QtCore import QObject, Signal
-from account_manager import AccountManager
-from uploader import Uploader
-from downloader import Downloader
+from .account_manager import AccountManager
+from .uploader import Uploader
+from .downloader import Downloader
 
 class Worker(QObject):
     finished = Signal(str, str)
