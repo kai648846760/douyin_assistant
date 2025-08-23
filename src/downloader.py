@@ -65,11 +65,11 @@ class Downloader:
             response = self.session.get(url, params=params, timeout=10)
             response.raise_for_status()
             return response.json()
-        except requests.RequestException as e:
-            print(f"请求API失败: {e}")
-            return None
         except requests.exceptions.JSONDecodeError:
             print("请求API失败: 服务器未返回有效的JSON数据，可能已被风控。")
+            return None
+        except requests.RequestException as e:
+            print(f"请求API失败: {e}")
             return None
 
     def _download_single_video(self, aweme: Dict, sub_folder: str = ""):
@@ -112,7 +112,8 @@ class Downloader:
             if page == 1 and name_key:
                 info_dict = data.get(name_key, {})
                 dynamic_name = info_dict.get('mix_name') or info_dict.get('name', sub_folder)
-                folder_name = f"{sub_folder}_{''.join(c for c in dynamic_name if c not in r'\\/:*?\"<>|')}"
+                invalid_chars = r'\/:*?"<>|'
+                folder_name = f"{sub_folder}_{''.join(c for c in dynamic_name if c not in invalid_chars)}"
                 print(f"  {entity_name}名称: {dynamic_name}")
 
             for aweme in data['aweme_list']:
