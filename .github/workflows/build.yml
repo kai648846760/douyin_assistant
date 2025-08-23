@@ -69,6 +69,8 @@ jobs:
                    --hidden-import=PySide6.QtGui \
                    --hidden-import=PySide6.QtNetwork \
                    --hidden-import=PySide6.QtPrintSupport \
+                   --hidden-import=PySide6.QtWebEngineCore \
+                   --hidden-import=PySide6.QtWebEngineWidgets \
                    --hidden-import=playwright \
                    --hidden-import=playwright.sync_api \
                    --hidden-import=playwright.async_api \
@@ -90,6 +92,7 @@ jobs:
                    --hidden-import=time \
                    --collect-all playwright \
                    --collect-all PySide6 \
+                   --no-symlinks \
                    gui_main.py
 
     - name: Create version info
