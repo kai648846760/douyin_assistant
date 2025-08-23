@@ -164,9 +164,10 @@ jobs:
         else
           # 在macOS上，--windowed模式会生成.app包
           if [ -d "dist/douyou_assistant.app" ]; then
-            echo "Found .app bundle, copying entire bundle"
-            cp -r "dist/douyou_assistant.app" "dist/"
+            echo "Found .app bundle at dist/douyou_assistant.app"
+            echo "No need to copy - .app bundle is already in the correct location"
           elif [ -f "dist/douyou_assistant/douyou_assistant" ]; then
+            echo "Found executable, copying to root of dist"
             cp "dist/douyou_assistant/douyou_assistant" "dist/"
           else
             echo "Warning: macOS executable not found in expected location"
