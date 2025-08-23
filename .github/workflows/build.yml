@@ -37,7 +37,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.13'
+        python-version: '3.11'  # 使用更稳定的版本
 
     - name: Install uv
       shell: bash
@@ -78,58 +78,163 @@ jobs:
           DATA_SEP=":"
         fi
 
-        pyinstaller --clean \
-                   --name douyou_assistant \
-                   --windowed \
-                   --onedir \
-                   --noconfirm \
-                   --icon icon.ico \
-                   --add-data "src${DATA_SEP}src" \
-                   --add-data "config${DATA_SEP}config" \
-                   --hidden-import PySide6.QtCore \
-                   --hidden-import PySide6.QtWidgets \
-                   --hidden-import PySide6.QtGui \
-                   --hidden-import PySide6.QtNetwork \
-                   --hidden-import PySide6.QtMultimedia \
-                   --hidden-import playwright \
-                   --hidden-import playwright.sync_api \
-                   --hidden-import playwright.async_api \
-                   --hidden-import playwright._impl \
-                   --hidden-import playwright._api \
-                   --hidden-import src.worker \
-                   --hidden-import src.account_manager \
-                   --hidden-import src.downloader \
-                   --hidden-import src.uploader \
-                   --hidden-import src.api_endpoints \
-                   --hidden-import src.xbogus \
-                   --hidden-import requests \
-                   --hidden-import requests.adapters \
-                   --hidden-import rich \
-                   --hidden-import rich.console \
-                   --hidden-import rich.panel \
-                   --hidden-import browser_cookie3 \
-                   --hidden-import browser_cookie3.chrome \
-                   --hidden-import browser_cookie3.firefox \
-                   --hidden-import browser_cookie3.edge \
-                   --collect-all playwright \
-                   --collect-all PySide6 \
-                   gui_main.py
+        # 创建PyInstaller规格文件以获得更好的控制
+        cat > douyou_assistant.spec << 'EOF'
+        # -*- mode: python ; coding: utf-8 -*-
+        import sys
+        from pathlib import Path
+
+        # 设置分隔符
+        import os
+        if os.name == 'nt':
+            pathsep = ';'
+        else:
+            pathsep = ':'
+
+        block_cipher = None
+
+        a = Analysis(
+            ['gui_main.py'],
+            pathex=[],
+            binaries=[],
+            datas=[
+                ('src', 'src'),
+                ('config', 'config'),
+            ],
+            hiddenimports=[
+                # PySide6模块
+                'PySide6.QtCore',
+                'PySide6.QtWidgets', 
+                'PySide6.QtGui',
+                'PySide6.QtNetwork',
+                'PySide6.QtMultimedia',
+                # 项目模块
+                'worker',
+                'account_manager',
+                'downloader',
+                'uploader',
+                'api_endpoints', 
+                'xbogus',
+                'main_window',
+                'main',
+                'gui',
+                # 第三方模块
+                'requests',
+                'requests.adapters',
+                'requests.auth',
+                'requests.cookies',
+                'requests.models',
+                'requests.sessions',
+                'urllib3',
+                'certifi',
+                'charset_normalizer',
+                'rich',
+                'rich.console',
+                'rich.panel',
+                'rich.text',
+                'rich.markup',
+                'browser_cookie3',
+                'browser_cookie3.chrome',
+                'browser_cookie3.firefox',
+                'browser_cookie3.edge',
+                'browser_cookie3.safari',
+                'browser_cookie3.opera',
+                # Playwright相关
+                'playwright',
+                'playwright.sync_api',
+                'playwright.async_api',
+                'playwright._impl',
+                'playwright._api',
+                'playwright._impl._driver',
+                'greenlet',
+                'greenlet._greenlet',
+            ],
+            hookspath=[],
+            hooksconfig={},
+            runtime_hooks=['runtime_hook_playwright.py'],
+            excludes=[
+                'tkinter',
+                'matplotlib',
+                'numpy',
+                'scipy',
+                'pandas',
+                'IPython',
+                'jupyter',
+                'notebook',
+            ],
+            win_no_prefer_redirects=False,
+            win_private_assemblies=False,
+            cipher=block_cipher,
+            noarchive=False,
+        )
+
+        pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+
+        exe = EXE(
+            pyz,
+            a.scripts,
+            [],
+            exclude_binaries=True,
+            name='douyou_assistant',
+            debug=False,
+            bootloader_ignore_signals=False,
+            strip=False,
+            upx=True,
+            console=False,
+            disable_windowed_traceback=False,
+            argv_emulation=False,
+            target_arch=None,
+            codesign_identity=None,
+            entitlements_file=None,
+            icon=['icon.ico'],
+        )
+
+        coll = COLLECT(
+            exe,
+            a.binaries,
+            a.zipfiles,
+            a.datas,
+            strip=False,
+            upx=True,
+            upx_exclude=[],
+            name='douyou_assistant',
+        )
+        EOF
+
+        # 使用spec文件构建
+        pyinstaller douyou_assistant.spec --clean --noconfirm
 
     - name: Verify build output
       shell: bash
       run: |
-        if [ ! -f "dist/douyou_assistant${{ matrix.ext }}" ]; then
+        # 使用onedir模式，可执行文件在dist/douyou_assistant/目录下
+        if [ ! -f "dist/douyou_assistant/douyou_assistant${{ matrix.ext }}" ]; then
           echo "Error: Build failed - executable not found!"
+          echo "Contents of dist directory:"
+          ls -la dist/ || true
+          echo "Contents of dist/douyou_assistant directory:"
+          ls -la dist/douyou_assistant/ || true
           exit 1
         fi
-        ls -la dist/
+        echo "Build successful! Files in dist/douyou_assistant/:"
+        ls -la dist/douyou_assistant/
+
+    - name: Copy executable to root of dist for easier access
+      shell: bash
+      run: |
+        # 复制可执行文件到dist根目录，保持向后兼容
+        if [ "$RUNNER_OS" == "Windows" ]; then
+          cp "dist/douyou_assistant/douyou_assistant.exe" "dist/"
+        else
+          cp "dist/douyou_assistant/douyou_assistant" "dist/"
+        fi
 
     - name: Create version info
       run: |
         echo "Version: ${{ github.event.inputs.version || github.ref_name }}" > version.txt
         echo "Build Date: $(date)" >> version.txt
         echo "Platform: ${{ matrix.platform }}" >> version.txt
-        echo "Python Version: 3.13" >> version.txt
+        echo "Python Version: 3.11" >> version.txt
 
     - name: Test executable (basic)
       shell: bash
@@ -137,11 +242,29 @@ jobs:
         # Basic test to ensure executable runs
         if [ "$RUNNER_OS" == "Windows" ]; then
           # Windows executable
-          ./dist/douyou_assistant.exe --help || echo "Executable test completed"
+          echo "Testing Windows executable..."
+          ./dist/douyou_assistant/douyou_assistant.exe --version 2>/dev/null || echo "GUI application detected - no CLI version support"
+          echo "Windows executable test completed"
         else
-          # macOS executable
-          chmod +x dist/douyou_assistant
-          ./dist/douyou_assistant --help || echo "Executable test completed"
+          # macOS executable  
+          echo "Testing macOS executable..."
+          chmod +x dist/douyou_assistant/douyou_assistant
+          ./dist/douyou_assistant/douyou_assistant --version 2>/dev/null || echo "GUI application detected - no CLI version support"
+          echo "macOS executable test completed"
+        fi
+
+    - name: Create distribution archive
+      shell: bash
+      run: |
+        # 创建分发压缩包
+        if [ "$RUNNER_OS" == "Windows" ]; then
+          cd dist
+          zip -r "../douyou_assistant-${{ matrix.platform }}.zip" douyou_assistant/
+          cd ..
+        else
+          cd dist
+          tar -czf "../douyou_assistant-${{ matrix.platform }}.tar.gz" douyou_assistant/
+          cd ..
         fi
 
     - name: Upload build artifacts
@@ -149,7 +272,7 @@ jobs:
       with:
         name: douyou_assistant-${{ matrix.platform }}
         path: |
-          dist/douyou_assistant${{ matrix.ext }}
+          douyou_assistant-${{ matrix.platform }}.*
           version.txt
         if-no-files-found: error
 
@@ -165,14 +288,43 @@ jobs:
         path: ./artifacts
 
     - name: Display structure of downloaded files
-      run: ls -la ./artifacts/
+      run: |
+        echo "Artifacts structure:"
+        find ./artifacts -type f -name "*" | head -20
 
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
         files: |
-          ./artifacts/douyou_assistant-windows/douyou_assistant.exe
-          ./artifacts/douyou_assistant-macos/douyou_assistant
+          ./artifacts/douyou_assistant-windows/douyou_assistant-windows.zip
+          ./artifacts/douyou_assistant-macos/douyou_assistant-macos.tar.gz
         generate_release_notes: true
+        body: |
+          ## 抖音全能助手 - 自动构建版本
+
+          ### 安装说明
+          
+          **Windows用户：**
+          1. 下载 `douyou_assistant-windows.zip`
+          2. 解压到任意目录
+          3. 运行 `douyou_assistant.exe`
+          
+          **macOS用户：**
+          1. 下载 `douyou_assistant-macos.tar.gz`
+          2. 解压到任意目录
+          3. 运行 `douyou_assistant`
+          
+          ### 功能特性
+          - 支持多账号管理
+          - 支持视频下载（主页作品、点赞作品、收藏作品等）
+          - 支持视频上传
+          - 现代化GUI界面
+          
+          ### 技术说明
+          - Python 3.11
+          - 使用 PyInstaller 打包
+          - 包含所有必要的依赖库
+          
+          如遇到问题，请查看项目的 README 文档或提交 Issue。
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
