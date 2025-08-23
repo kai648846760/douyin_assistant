@@ -123,17 +123,33 @@ jobs:
     - name: Verify build output
       shell: bash
       run: |
-        # 使用onedir模式，可执行文件在dist/douyou_assistant/目录下
-        if [ ! -f "dist/douyou_assistant/douyou_assistant${{ matrix.ext }}" ]; then
-          echo "Error: Build failed - executable not found!"
-          echo "Contents of dist directory:"
-          ls -la dist/ || true
-          echo "Contents of dist/douyou_assistant directory:"
-          ls -la dist/douyou_assistant/ || true
-          exit 1
+        # 检查构建输出
+        echo "Contents of dist directory:"
+        ls -la dist/ || true
+        
+        # 在macOS上检查.app包或可执行文件
+        if [ "$RUNNER_OS" == "Darwin" ]; then
+          if [ -d "dist/douyou_assistant.app" ]; then
+            echo "Build successful! Found .app bundle"
+            ls -la dist/douyou_assistant.app/
+          elif [ -f "dist/douyou_assistant/douyou_assistant" ]; then
+            echo "Build successful! Found executable"
+            ls -la dist/douyou_assistant/
+          else
+            echo "Error: Build failed - no executable or .app bundle found!"
+            exit 1
+          fi
+        else
+          # Windows检查
+          if [ ! -f "dist/douyou_assistant/douyou_assistant${{ matrix.ext }}" ]; then
+            echo "Error: Build failed - executable not found!"
+            echo "Contents of dist/douyou_assistant directory:"
+            ls -la dist/douyou_assistant/ || true
+            exit 1
+          fi
+          echo "Build successful! Files in dist/douyou_assistant/:"
+          ls -la dist/douyou_assistant/
         fi
-        echo "Build successful! Files in dist/douyou_assistant/:"
-        ls -la dist/douyou_assistant/
 
     - name: Copy executable to root of dist for easier access
       shell: bash
@@ -146,10 +162,18 @@ jobs:
             echo "Warning: Windows executable not found in expected location"
           fi
         else
-          if [ -f "dist/douyou_assistant/douyou_assistant" ]; then
+          # 在macOS上，--windowed模式会生成.app包
+          if [ -d "dist/douyou_assistant.app" ]; then
+            echo "Found .app bundle, copying entire bundle"
+            cp -r "dist/douyou_assistant.app" "dist/"
+          elif [ -f "dist/douyou_assistant/douyou_assistant" ]; then
             cp "dist/douyou_assistant/douyou_assistant" "dist/"
           else
             echo "Warning: macOS executable not found in expected location"
+            echo "Contents of dist directory:"
+            ls -la dist/ || true
+            echo "Contents of dist/douyou_assistant directory:"
+            ls -la dist/douyou_assistant/ || true
           fi
         fi
         
