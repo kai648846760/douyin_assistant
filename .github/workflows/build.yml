@@ -95,29 +95,25 @@ jobs:
 
         a = Analysis(
             ['gui_main.py'],
-            pathex=[],
+            pathex=['.', 'src', 'config'],
             binaries=[],
             datas=[
                 ('src', 'src'),
                 ('config', 'config'),
             ],
             hiddenimports=[
-                # PySide6模块
-                'PySide6.QtCore',
-                'PySide6.QtWidgets', 
-                'PySide6.QtGui',
-                'PySide6.QtNetwork',
-                'PySide6.QtMultimedia',
-                # 项目模块
-                'worker',
-                'account_manager',
-                'downloader',
-                'uploader',
-                'api_endpoints', 
-                'xbogus',
-                'main_window',
-                'main',
-                'gui',
+                # 项目模块（使用src前缀）
+                'src.worker',
+                'src.account_manager', 
+                'src.downloader',
+                'src.uploader',
+                'src.api_endpoints',
+                'src.xbogus',
+                'src.main_window',
+                'src.main',
+                'src.gui',
+                # 配置模块
+                'config.config',
                 # 第三方模块
                 'requests',
                 'requests.adapters',
@@ -222,12 +218,24 @@ jobs:
     - name: Copy executable to root of dist for easier access
       shell: bash
       run: |
-        # 复制可执行文件到dist根目录，保持向后兼容
+        # onedir模式下，检查可执行文件是否存在并复制
         if [ "$RUNNER_OS" == "Windows" ]; then
-          cp "dist/douyou_assistant/douyou_assistant.exe" "dist/"
+          if [ -f "dist/douyou_assistant/douyou_assistant.exe" ]; then
+            cp "dist/douyou_assistant/douyou_assistant.exe" "dist/"
+          else
+            echo "Warning: Windows executable not found in expected location"
+          fi
         else
-          cp "dist/douyou_assistant/douyou_assistant" "dist/"
+          if [ -f "dist/douyou_assistant/douyou_assistant" ]; then
+            cp "dist/douyou_assistant/douyou_assistant" "dist/"
+          else
+            echo "Warning: macOS executable not found in expected location"
+          fi
         fi
+        
+        # 显示dist目录结构用于调试
+        echo "Final dist structure:"
+        ls -la dist/ || true
 
     - name: Create version info
       run: |
