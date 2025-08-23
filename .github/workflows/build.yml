@@ -54,8 +54,11 @@ jobs:
         playwright install chromium
         playwright install-deps
 
+    - name: Clean Qt duplicates before build
+      run: rm -rf dist build && python -m pip uninstall -y PySide6-Essentials 2>/dev/null || true
+    
     - name: Create executable with PyInstaller
-      run: pyinstaller --name douyou_assistant --windowed --onedir --icon icon.ico --collect-all playwright --collect-all PySide6 --add-data "src:src" --add-data "config:config" --noupx gui_main.py
+      run: pyinstaller --name=douyou_assistant --clean --windowed --onedir --icon=icon.ico --collect-all playwright --collect-all PySide6 --add-data "src:src" --add-data "config:config" --noupx gui_main.py
 
     - name: Create version info
       run: |
