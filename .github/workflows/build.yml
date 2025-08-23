@@ -57,59 +57,17 @@ jobs:
     - name: Create executable with PyInstaller
       shell: bash
       run: |
-        # 统一的PyInstaller配置，包含所有依赖
         pyinstaller --name="douyou_assistant" \
-                   --windowed \
-                   --onefile \
-                   --icon=icon.ico \
-                   --add-data="src${{ matrix.os == 'windows-latest' && ';src' || ':src' }}" \
-                   --add-data="config${{ matrix.os == 'windows-latest' && ';config' || ':config' }}" \
-                   --hidden-import=PySide6.QtCore \
-                   --hidden-import=PySide6.QtWidgets \
-                   --hidden-import=PySide6.QtGui \
-                   --hidden-import=PySide6.QtNetwork \
-                   --hidden-import=PySide6.QtPrintSupport \
-                   --hidden-import=PySide6.QtWebEngineCore \
-                   --hidden-import=PySide6.QtWebEngineWidgets \
-                   --hidden-import=PySide6.QtWebEngine \
-                   --hidden-import=PySide6.QtOpenGL \
-                   --hidden-import=playwright \
-                   --hidden-import=playwright.sync_api \
-                   --hidden-import=playwright.async_api \
-                   --hidden-import=playwright._impl \
-                   --hidden-import=playwright._api \
-                   --hidden-import=src.worker \
-                   --hidden-import=src.account_manager \
-                   --hidden-import=src.downloader \
-                   --hidden-import=src.uploader \
-                   --hidden-import=src.api_endpoints \
-                   --hidden-import=src.xbogus \
-                   --hidden-import=src.main \
-                   --hidden-import=src.gui \
-                   --hidden-import=src.main_window \
-                   --hidden-import=requests \
-                   --hidden-import=rich \
-                   --hidden-import=rich.console \
-                   --hidden-import=rich.panel \
-                   --hidden-import=browser_cookie3 \
-                   --hidden-import=json \
-                   --hidden-import=os \
-                   --hidden-import=sys \
-                   --hidden-import=time \
-                   --hidden-import=threading \
-                   --hidden-import=queue \
-                   --hidden-import=urllib \
-                   --hidden-import=urllib.parse \
-                   --hidden-import=base64 \
-                   --hidden-import=hashlib \
-                   --hidden-import=re \
-                   --hidden-import=typing \
-                   --hidden-import=argparse \
-                   --collect-all playwright \
-                   --collect-all PySide6 \
-                   --collect-all rich \
-                   ${{ matrix.os == 'macos-latest' && '--noupx' || '' }} \
-                   gui_main.py
+                    --windowed \
+                    --onedir \\\      # 改为目录打包
+                    --icon=icon.ico \
+                    --add-data="src${{ matrix.os == 'windows-latest' && ';src' || ':src' }}" \
+                    --add-data="config${{ matrix.os == 'windows-latest' && ';config' || ':config' }}" \
+                    --collect-all playwright \
+                    --collect-all PySide6 \
+                    --collect-all rich \
+                    ${{ matrix.os == 'macos-latest' && '--noupx' || '' }} \
+                    gui_main.py
 
     - name: Create version info
       run: |
