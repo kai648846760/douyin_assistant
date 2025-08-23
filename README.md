@@ -90,6 +90,7 @@ git push origin v1.0.0
 - **PySide6** - GUI界面库
 - **Playwright** - 浏览器自动化（包含Chromium浏览器）
 - **PyInstaller** - 打包工具
+- **Pillow** - 图像处理（图标格式转换）
 
 ## 📋 使用说明
 
