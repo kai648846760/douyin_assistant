@@ -45,17 +45,17 @@ jobs:
         curl -LsSf https://astral.sh/uv/install.sh | sh
         echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
-    - name: Install dependencies with uv
+    - name: Install dependencies
       shell: bash
       run: |
-        uv pip install --system -r requirements.txt
-        uv pip install --system "pyinstaller>=6.6,<7" pillow
+        pip install -r requirements.txt
+        pip install "pyinstaller>=6.6,<7" pillow
         # tkinter是Python内置库，无需额外安装
 
-    - name: Install Playwright browsers with uv
+    - name: Install Playwright browsers
       shell: bash
       run: |
-        uv pip install --system playwright
+        pip install playwright
         playwright install chromium
         playwright install-deps
 
@@ -73,7 +73,6 @@ jobs:
         python -c "import sys; print('Python path:', sys.path)"
         python -c "import tkinter; print('Tkinter available (built-in)')" || echo "Tkinter import failed"
         python -c "import customtkinter; print('CustomTkinter imported successfully')" || echo "CustomTkinter import failed"
-        python -c "import playwright; print('Playwright imported successfully')" || echo "Playwright import failed"
         python -c "import src.worker_ctk; print('Worker CTK module imported successfully')" || echo "Worker CTK import failed"
         python -c "import src.account_manager; print('Account manager imported successfully')" || echo "Account manager import failed"
         python -c "import PyInstaller; print('PyInstaller version:', PyInstaller.__version__)" || echo "PyInstaller import failed"
@@ -88,147 +87,34 @@ jobs:
           DATA_SEP=":"
         fi
 
-        # 创建PyInstaller规格文件以获得更好的控制
-        cat > douyou_assistant.spec << 'EOF'
-        # -*- mode: python ; coding: utf-8 -*-
-        import sys
-        import os
-        from pathlib import Path
-
-        block_cipher = None
-
-        a = Analysis(
-            ['gui_main_ctk.py'],
-            pathex=['.', 'src', 'config'],
-            binaries=[],
-            datas=[
-                ('src', 'src'),
-                ('config', 'config'),
-                ('icon.ico', '.'),
-            ],
-            hiddenimports=[
-                # 项目核心模块（使用完整路径）
-                'src.worker_ctk',
-                'src.main_window_ctk',
-                'src.account_manager', 
-                'src.downloader',
-                'src.uploader',
-                'src.api_endpoints',
-                'src.xbogus',
-                'src.main',
-                # 配置模块
-                'config',
-                'config.config',
-                # 第三方核心模块
-                'requests',
-                'requests.adapters',
-                'requests.auth',
-                'requests.cookies',
-                'requests.models',
-                'requests.sessions',
-                'urllib3',
-                'urllib3.util',
-                'urllib3.util.retry',
-                'certifi',
-                'charset_normalizer',
-                'idna',
-                # Rich相关
-                'rich',
-                'rich.console',
-                'rich.panel',
-                'rich.text',
-                'rich.markup',
-                'rich.progress',
-                'rich.table',
-                # Browser Cookie相关
-                'browser_cookie3',
-                'browser_cookie3.chrome',
-                'browser_cookie3.firefox',
-                'browser_cookie3.edge',
-                'browser_cookie3.safari',
-                'browser_cookie3.opera',
-                # Playwright相关
-                'playwright',
-                'playwright.sync_api',
-                'playwright.async_api',
-                'playwright._impl',
-                'playwright._api',
-                'playwright._impl._driver',
-                'playwright._impl._browser_type',
-                'playwright._impl._page',
-                'greenlet',
-                'greenlet._greenlet',
-                # customtkinter相关
-                'customtkinter',
-                'tkinter',
-                'tkinter.ttk',
-                'tkinter.filedialog',
-                'tkinter.messagebox',
-                'tkinter.scrolledtext',
-                # 系统相关
-                'json',
-                'sqlite3',
-                'pathlib',
-                'subprocess',
-                'threading',
-                'queue',
-            ],
-            hookspath=[],
-            hooksconfig={},
-            runtime_hooks=['runtime_hook_playwright.py'],
-            excludes=[
-                'matplotlib',
-                'numpy',
-                'scipy',
-                'pandas',
-                'IPython',
-                'jupyter',
-                'notebook',
-                'test',
-                'tests',
-                'pytest',
-            ],
-            win_no_prefer_redirects=False,
-            win_private_assemblies=False,
-            cipher=block_cipher,
-            noarchive=False,
-        )
-
-        pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
-
-        exe = EXE(
-            pyz,
-            a.scripts,
-            [],
-            exclude_binaries=True,
-            name='douyou_assistant',
-            debug=False,
-            bootloader_ignore_signals=False,
-            strip=False,
-            upx=True,
-            console=False,
-            disable_windowed_traceback=False,
-            argv_emulation=False,
-            target_arch=None,
-            codesign_identity=None,
-            entitlements_file=None,
-            icon=['icon.ico'],
-        )
-
-        coll = COLLECT(
-            exe,
-            a.binaries,
-            a.zipfiles,
-            a.datas,
-            strip=False,
-            upx=True,
-            upx_exclude=[],
-            name='douyou_assistant',
-        )
-        EOF
-
-        # 使用spec文件构建
-        pyinstaller douyou_assistant.spec --clean --noconfirm
+        # 使用简化的PyInstaller命令，包含Playwright runtime hook
+         pyinstaller gui_main_ctk.py \
+           --name douyou_assistant \
+           --windowed \
+           --onedir \
+           --clean \
+           --noconfirm \
+           --add-data "src:src" \
+           --add-data "config:config" \
+           --add-data "icon.ico:." \
+           --runtime-hook "runtime_hook_playwright.py" \
+           --hidden-import "src.worker_ctk" \
+           --hidden-import "src.main_window_ctk" \
+           --hidden-import "src.account_manager" \
+           --hidden-import "src.downloader" \
+           --hidden-import "src.uploader" \
+           --hidden-import "src.api_endpoints" \
+           --hidden-import "src.xbogus" \
+           --hidden-import "customtkinter" \
+           --hidden-import "requests" \
+           --hidden-import "rich" \
+           --hidden-import "browser_cookie3" \
+           --hidden-import "playwright" \
+           --exclude-module "matplotlib" \
+           --exclude-module "numpy" \
+           --exclude-module "scipy" \
+           --exclude-module "pandas" \
+           --icon "icon.ico"
 
     - name: Verify build output
       shell: bash

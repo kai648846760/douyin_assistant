@@ -4,10 +4,41 @@
 
 import os
 import time
+import subprocess
+import sys
 from playwright.sync_api import sync_playwright, Browser, Page, Playwright, TimeoutError as PlaywrightTimeoutError
 from rich.console import Console
 
 console = Console()
+
+def ensure_playwright_browsers():
+    """确保Playwright浏览器已安装"""
+    try:
+        # 尝试启动Playwright来检查浏览器是否可用
+        with sync_playwright() as p:
+            try:
+                # 尝试获取浏览器可执行文件路径
+                browser_path = p.chromium.executable_path
+                if os.path.exists(browser_path):
+                    return True
+            except Exception:
+                pass
+        
+        # 如果浏览器不可用，尝试安装
+        console.print("[yellow]检测到Playwright浏览器未安装，正在自动安装...[/yellow]")
+        result = subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], 
+                              capture_output=True, text=True, timeout=300)
+        
+        if result.returncode == 0:
+            console.print("[green]Playwright浏览器安装成功！[/green]")
+            return True
+        else:
+            console.print(f"[red]Playwright浏览器安装失败: {result.stderr}[/red]")
+            return False
+            
+    except Exception as e:
+        console.print(f"[red]检查或安装Playwright浏览器时出错: {e}[/red]")
+        return False
 
 class Uploader:
     """负责通过模拟浏览器操作上传视频到抖音 (已重构为会话模式，支持批量上传)"""
@@ -21,6 +52,10 @@ class Uploader:
 
     def start_session(self) -> Page:
         """启动Playwright，打开浏览器，并处理一次性登录。返回一个可用的页面对象。"""
+        # 确保Playwright浏览器已安装
+        if not ensure_playwright_browsers():
+            raise RuntimeError("无法安装或使用Playwright浏览器")
+            
         self.playwright = sync_playwright().start()
         
         print("正在启动浏览器...")
