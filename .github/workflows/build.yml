@@ -57,8 +57,13 @@ jobs:
     - name: Clean Qt duplicates before build
       run: rm -rf dist build && python -m pip uninstall -y PySide6-Essentials 2>/dev/null || true
     
-    - name: Create executable with PyInstaller
-      run: pyinstaller --name=douyou_assistant --clean --windowed --onedir --icon=icon.ico --collect-all playwright --collect-all PySide6 --add-data "src:src" --add-data "config:config" --noupx gui_main.py
+    - name: Upgrade PyInstaller and clean cache
+      run: |
+        python -m pip install -U "pyinstaller>=6.6,<7"
+        rm -rf dist build __pycache__ *.spec
+    
+    - name: Create executable (force clean)
+      run: pyinstaller --clean --name douyou_assistant --windowed --onedir --icon icon.ico --collect-all playwright --collect-all PySide6 --add-data src:src gui_main.py
 
     - name: Create version info
       run: |
