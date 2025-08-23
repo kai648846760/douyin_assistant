@@ -52,21 +52,21 @@ jobs:
         playwright install chromium
         playwright install-deps
 
-    - name: Create executable with PyInstaller
+    - name: Create executable with PyInstaller (Windows)
+      if: matrix.os == 'windows-latest'
       shell: bash
       run: |
         pyinstaller --name="douyou_assistant" \
                    --windowed \
                    --onefile \
                    --icon=icon.ico \
-                   --add-data="src:src" \
-                   --add-data="config:config" \
+                   --add-data="src;src" \
+                   --add-data="config;config" \
                    --hidden-import=PySide6.QtCore \
                    --hidden-import=PySide6.QtWidgets \
                    --hidden-import=PySide6.QtGui \
                    --hidden-import=PySide6.QtNetwork \
                    --hidden-import=PySide6.QtWebEngineCore \
-                   --hidden-import=PySide6.QtWebEngineWidgets \
                    --hidden-import=playwright \
                    --hidden-import=playwright.sync_api \
                    --hidden-import=src.worker \
@@ -78,6 +78,28 @@ jobs:
                    --hidden-import=browser_cookie3 \
                    --collect-all playwright \
                    --collect-all PySide6 \
+                   gui_main.py
+
+    - name: Create executable with PyInstaller (macOS)
+      if: matrix.os == 'macos-latest'
+      shell: bash
+      run: |
+        # macOS使用最简配置，避免符号链接问题
+        pyinstaller --name="douyou_assistant" \
+                   --windowed \
+                   --onefile \
+                   --icon=icon.ico \
+                   --add-data="src:src" \
+                   --add-data="config:config" \
+                   --hidden-import=PySide6.QtCore \
+                   --hidden-import=PySide6.QtWidgets \
+                   --hidden-import=PySide6.QtGui \
+                   --hidden-import=playwright \
+                   --hidden-import=playwright.sync_api \
+                   --hidden-import=src.worker \
+                   --hidden-import=src.account_manager \
+                   --hidden-import=requests \
+                   --noupx \
                    gui_main.py
 
     - name: Create version info
