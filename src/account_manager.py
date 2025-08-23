@@ -88,9 +88,11 @@ class AccountManager:
         self._save_accounts()
         print(f"成功添加新账号 '{username}'，并自动创建了数据目录。")
 
-    def update_cookie_from_browser(self, username: str, browser_name: str):
+    def update_cookie_from_browser(self, username: str, browser_name: str) -> bool:
         account = self.get_account(username)
-        if not account: print(f"错误：未在 {self.file_path} 中找到用户名为 '{username}' 的账号。"); return
+        if not account: 
+            print(f"错误：未在 {self.file_path} 中找到用户名为 '{username}' 的账号。")
+            return False
 
         print(f"正在尝试从 '{browser_name}' 浏览器中获取 'douyin.com' 的Cookie...")
         try:
@@ -99,10 +101,13 @@ class AccountManager:
             cookie_str = "; ".join([f"{cookie.name}={cookie.value}" for cookie in cj])
             
             if "sessionid" not in cookie_str:
-                print(f"错误：未能在 '{browser_name}' 中找到 'douyin.com' 的有效登录Cookie。"); return
+                print(f"错误：未能在 '{browser_name}' 中找到 'douyin.com' 的有效登录Cookie。")
+                return False
 
             account['cookie'] = cookie_str
             self._save_accounts()
             print(f"成功为账号 '{username}' 更新Cookie！")
+            return True
         except Exception as e:
             print(f"获取Cookie时发生错误: {e}")
+            return False

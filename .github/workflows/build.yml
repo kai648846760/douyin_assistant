@@ -50,8 +50,7 @@ jobs:
       run: |
         uv pip install --system -r requirements.txt
         uv pip install --system "pyinstaller>=6.6,<7" pillow
-        # 确保PySide6正确安装
-        uv pip install --system --force-reinstall PySide6
+        # tkinter是Python内置库，无需额外安装
 
     - name: Install Playwright browsers with uv
       shell: bash
@@ -72,10 +71,12 @@ jobs:
         echo "Checking Python and dependencies..."
         python --version
         python -c "import sys; print('Python path:', sys.path)"
-        python -c "import PySide6; print('PySide6 version:', PySide6.__version__)"
-        python -c "import playwright; print('Playwright installed')"
-        python -c "import sys, os; sys.path.insert(0, 'src'); import worker, account_manager; print('Project modules found')"
-        pyinstaller --version
+        python -c "import tkinter; print('Tkinter available (built-in)')" || echo "Tkinter import failed"
+        python -c "import customtkinter; print('CustomTkinter imported successfully')" || echo "CustomTkinter import failed"
+        python -c "import playwright; print('Playwright imported successfully')" || echo "Playwright import failed"
+        python -c "import src.worker_ctk; print('Worker CTK module imported successfully')" || echo "Worker CTK import failed"
+        python -c "import src.account_manager; print('Account manager imported successfully')" || echo "Account manager import failed"
+        python -c "import PyInstaller; print('PyInstaller version:', PyInstaller.__version__)" || echo "PyInstaller import failed"
 
     - name: Create executable (optimized build)
       shell: bash
@@ -97,7 +98,7 @@ jobs:
         block_cipher = None
 
         a = Analysis(
-            ['gui_main.py'],
+            ['gui_main_ctk.py'],
             pathex=['.', 'src', 'config'],
             binaries=[],
             datas=[
@@ -107,14 +108,13 @@ jobs:
             ],
             hiddenimports=[
                 # 项目核心模块（使用完整路径）
-                'src.worker',
+                'src.worker_ctk',
+                'src.main_window_ctk',
                 'src.account_manager', 
                 'src.downloader',
                 'src.uploader',
                 'src.api_endpoints',
                 'src.xbogus',
-                'src.main_window',
-                'src.gui',
                 'src.main',
                 # 配置模块
                 'config',
@@ -158,6 +158,13 @@ jobs:
                 'playwright._impl._page',
                 'greenlet',
                 'greenlet._greenlet',
+                # customtkinter相关
+                'customtkinter',
+                'tkinter',
+                'tkinter.ttk',
+                'tkinter.filedialog',
+                'tkinter.messagebox',
+                'tkinter.scrolledtext',
                 # 系统相关
                 'json',
                 'sqlite3',
@@ -167,14 +174,9 @@ jobs:
                 'queue',
             ],
             hookspath=[],
-            hooksconfig={
-                'PySide6': {
-                    'include_plugins': ['platforms', 'imageformats', 'iconengines']
-                }
-            },
+            hooksconfig={},
             runtime_hooks=['runtime_hook_playwright.py'],
             excludes=[
-                'tkinter',
                 'matplotlib',
                 'numpy',
                 'scipy',
