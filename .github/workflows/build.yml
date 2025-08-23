@@ -114,6 +114,10 @@ jobs:
            --exclude-module "numpy" \
            --exclude-module "scipy" \
            --exclude-module "pandas" \
+           --exclude-module "PySide6" \
+           --exclude-module "src.worker" \
+           --exclude-module "src.main_window" \
+           --exclude-module "src.gui" \
            --icon "icon.ico"
 
     - name: Verify build output
