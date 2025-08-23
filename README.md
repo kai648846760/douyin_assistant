@@ -49,6 +49,48 @@
    python gui_main.py
    ```
 
+## 📦 自动构建和分发
+
+本项目使用 GitHub Actions 实现自动化跨平台构建，让您无需本地打包即可获得各平台的可执行文件。
+
+### 预构建版本
+
+从 [Releases](https://github.com/kai648846760/douyin_assistant/releases) 页面下载对应平台的最新版本：
+
+- **Windows**: `douyou_assistant.exe`
+- **macOS**: `douyou_assistant`
+- **Linux**: `douyou_assistant`
+
+### 触发自动构建
+
+1. **标签触发**：推送版本标签（例如 `v1.0.0`）
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+2. **手动触发**：在 GitHub Actions 页面手动运行工作流
+
+### 构建产物
+
+构建完成后，会在以下位置生成：
+- **构建产物**：Actions 页面的 Artifacts 部分
+- **自动发布**：当推送标签时，会自动创建 GitHub Release
+
+### 支持的平台
+
+- 🖥️ **Windows** (x64)
+- 🍎 **macOS** (x64/ARM64)
+- 🐧 **Linux** (x64)
+
+### 依赖说明
+
+构建过程中会自动安装以下依赖：
+- **Python 3.11** - 运行环境
+- **PySide6** - GUI界面库
+- **Playwright** - 浏览器自动化（包含Chromium浏览器）
+- **PyInstaller** - 打包工具
+
 ## 📋 使用说明
 
 ### 1. 账号管理
@@ -159,11 +201,13 @@ python gui_main.py
 ├── config/                # 配置文件
 │   ├── config.py          # 应用配置
 │   └── accounts.json      # 账号配置
-├── downloads/             # 下载的文件
-├── main.py               # 命令行入口
-├── gui_main.py           # GUI入口
-├── requirements.txt      # Python依赖
-└── README.md             # 项目说明
+├── browser_data/         # 浏览器数据目录（自动创建）
+├── downloads/            # 下载的文件
+├── main.py              # 命令行入口
+├── gui_main.py          # GUI入口
+├── requirements.txt     # Python依赖
+├── icon.ico            # 程序图标
+└── README.md            # 项目说明
 ```
 
 ## 🙏 致谢
