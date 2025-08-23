@@ -9,9 +9,9 @@ from rich.console import Console
 from rich.panel import Panel
 from rich import print as rprint
 
-from account_manager import AccountManager
-from downloader import Downloader
-from uploader import Uploader
+from .account_manager import AccountManager
+from .downloader import Downloader
+from .uploader import Uploader
 
 console = Console()
 account_manager = AccountManager()

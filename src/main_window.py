@@ -13,8 +13,8 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(__file__))
 
-from worker import Worker
-from account_manager import AccountManager
+from .worker import Worker
+from .account_manager import AccountManager
 
 class Stream(QObject):
     """用于重定向stdout和stderr到GUI文本框的流对象"""

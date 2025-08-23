@@ -15,8 +15,8 @@ from tkinter import filedialog, messagebox
 # 添加路径以便导入模块
 sys.path.insert(0, os.path.dirname(__file__))
 
-from account_manager import AccountManager
-from worker_ctk import WorkerCTK
+from .account_manager import AccountManager
+from .worker_ctk import WorkerCTK
 
 class MainWindowCTK(ctk.CTk):
     """使用CustomTkinter重新实现的主窗口，保留所有原始功能"""

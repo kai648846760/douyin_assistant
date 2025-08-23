@@ -10,9 +10,9 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(__file__))
 
-from account_manager import AccountManager
-from uploader import Uploader
-from downloader import Downloader
+from .account_manager import AccountManager
+from .uploader import Uploader
+from .downloader import Downloader
 
 class Worker(QObject):
     finished = Signal(str, str)

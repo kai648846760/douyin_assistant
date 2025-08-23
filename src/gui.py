@@ -4,7 +4,7 @@
 
 import sys
 from PySide6.QtWidgets import QApplication
-from main_window import MainWindow
+from .main_window import MainWindow
 
 if __name__ == '__main__':
     # 为了在打包后也能找到 Playwright 的浏览器，可能需要设置环境变量

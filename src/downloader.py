@@ -16,11 +16,11 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from config import HEADERS, DEFAULT_DOWNLOAD_PATH
-from api_endpoints import (
+from .api_endpoints import (
     SINGLE_VIDEO_API, USER_POST_API, USER_LIKE_API, USER_FAVORITE_API,
     USER_COLLECTS_API, USER_MIX_API, MUSIC_API, LIVE_API
 )
-from xbogus import ABogusManager
+from .xbogus import ABogusManager
 
 # 通用的请求参数，确保所有分页请求都能成功
 BASE_API_PARAMS = {
