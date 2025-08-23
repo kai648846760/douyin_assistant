@@ -1,7 +1,13 @@
 [project]
 name = "douyou-assistant"
 version = "0.1.0"
-description = "Add your description here"
+description = "抖音全能助手 - 支持多账号的抖音视频下载和上传工具"
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "requests",
+    "playwright",
+    "rich",
+    "browser-cookie3",
+    "PySide6"
+]

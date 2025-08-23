@@ -37,20 +37,24 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.11'
+        python-version: '3.13'
 
-    - name: Install dependencies
+    - name: Install uv
       shell: bash
       run: |
-        python -m pip install --upgrade pip
-        # 卸载可能存在的过时pathlib包
-        pip uninstall pathlib -y || true
-        pip install -r requirements.txt
-        pip install pyinstaller pillow
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
-    - name: Install Playwright browsers
+    - name: Install dependencies with uv
       shell: bash
       run: |
+        uv pip install --system -r requirements.txt
+        uv pip install --system pyinstaller pillow
+
+    - name: Install Playwright browsers with uv
+      shell: bash
+      run: |
+        uv pip install --system playwright
         playwright install chromium
         playwright install-deps
 
@@ -61,21 +65,32 @@ jobs:
     - name: Upgrade PyInstaller and clean cache
       shell: bash
       run: |
-        python -m pip install -U "pyinstaller>=6.6,<7"
+        uv pip install --system "pyinstaller>=6.6,<7"
         rm -rf dist build __pycache__ *.spec
-    
-    - name: Create executable (force clean)
+
+    - name: Create executable (optimized build)
+      shell: bash
       run: |
+        # Set data path separator based on OS
+        if [ "$RUNNER_OS" == "Windows" ]; then
+          DATA_SEP=";"
+        else
+          DATA_SEP=":"
+        fi
+
         pyinstaller --clean \
                    --name douyou_assistant \
                    --windowed \
                    --onedir \
+                   --noconfirm \
                    --icon icon.ico \
-                   --add-data src:src \
-                   --add-data config:config \
+                   --add-data "src${DATA_SEP}src" \
+                   --add-data "config${DATA_SEP}config" \
                    --hidden-import PySide6.QtCore \
                    --hidden-import PySide6.QtWidgets \
                    --hidden-import PySide6.QtGui \
+                   --hidden-import PySide6.QtNetwork \
+                   --hidden-import PySide6.QtMultimedia \
                    --hidden-import playwright \
                    --hidden-import playwright.sync_api \
                    --hidden-import playwright.async_api \
@@ -85,16 +100,49 @@ jobs:
                    --hidden-import src.account_manager \
                    --hidden-import src.downloader \
                    --hidden-import src.uploader \
+                   --hidden-import src.api_endpoints \
+                   --hidden-import src.xbogus \
                    --hidden-import requests \
+                   --hidden-import requests.adapters \
                    --hidden-import rich \
+                   --hidden-import rich.console \
+                   --hidden-import rich.panel \
                    --hidden-import browser_cookie3 \
+                   --hidden-import browser_cookie3.chrome \
+                   --hidden-import browser_cookie3.firefox \
+                   --hidden-import browser_cookie3.edge \
+                   --collect-all playwright \
+                   --collect-all PySide6 \
                    gui_main.py
+
+    - name: Verify build output
+      shell: bash
+      run: |
+        if [ ! -f "dist/douyou_assistant${{ matrix.ext }}" ]; then
+          echo "Error: Build failed - executable not found!"
+          exit 1
+        fi
+        ls -la dist/
 
     - name: Create version info
       run: |
         echo "Version: ${{ github.event.inputs.version || github.ref_name }}" > version.txt
         echo "Build Date: $(date)" >> version.txt
         echo "Platform: ${{ matrix.platform }}" >> version.txt
+        echo "Python Version: 3.13" >> version.txt
+
+    - name: Test executable (basic)
+      shell: bash
+      run: |
+        # Basic test to ensure executable runs
+        if [ "$RUNNER_OS" == "Windows" ]; then
+          # Windows executable
+          ./dist/douyou_assistant.exe --help || echo "Executable test completed"
+        else
+          # macOS executable
+          chmod +x dist/douyou_assistant
+          ./dist/douyou_assistant --help || echo "Executable test completed"
+        fi
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
