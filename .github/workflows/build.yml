@@ -55,19 +55,7 @@ jobs:
         playwright install-deps
 
     - name: Create executable with PyInstaller
-      shell: bash
-      run: |
-        pyinstaller --name="douyou_assistant" \
-                    --windowed \
-                    --onedir \\\      # 改为目录打包
-                    --icon=icon.ico \
-                    --add-data="src${{ matrix.os == 'windows-latest' && ';src' || ':src' }}" \
-                    --add-data="config${{ matrix.os == 'windows-latest' && ';config' || ':config' }}" \
-                    --collect-all playwright \
-                    --collect-all PySide6 \
-                    --collect-all rich \
-                    ${{ matrix.os == 'macos-latest' && '--noupx' || '' }} \
-                    gui_main.py
+      run: pyinstaller --name douyou_assistant --windowed --onedir --icon icon.ico --collect-all playwright --collect-all PySide6 --add-data "src:src" --add-data "config:config" --noupx gui_main.py
 
     - name: Create version info
       run: |
