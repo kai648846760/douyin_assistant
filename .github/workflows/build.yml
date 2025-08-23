@@ -50,6 +50,8 @@ jobs:
       run: |
         uv pip install --system -r requirements.txt
         uv pip install --system "pyinstaller>=6.6,<7" pillow
+        # 确保PySide6正确安装
+        uv pip install --system --force-reinstall PySide6
 
     - name: Install Playwright browsers with uv
       shell: bash
@@ -63,6 +65,17 @@ jobs:
       run: |
         rm -rf dist build __pycache__ *.spec
         python -m pip uninstall -y PySide6-Essentials 2>/dev/null || true
+
+    - name: Verify dependencies
+      shell: bash
+      run: |
+        echo "Checking Python and dependencies..."
+        python --version
+        python -c "import sys; print('Python path:', sys.path)"
+        python -c "import PySide6; print('PySide6 version:', PySide6.__version__)"
+        python -c "import playwright; print('Playwright installed')"
+        python -c "import sys, os; sys.path.insert(0, 'src'); import worker, account_manager; print('Project modules found')"
+        pyinstaller --version
 
     - name: Create executable (optimized build)
       shell: bash
@@ -85,7 +98,7 @@ jobs:
 
         a = Analysis(
             ['gui_main.py'],
-            pathex=['.'],
+            pathex=['.', 'src', 'config'],
             binaries=[],
             datas=[
                 ('src', 'src'),
@@ -93,22 +106,19 @@ jobs:
                 ('icon.ico', '.'),
             ],
             hiddenimports=[
-                # 项目核心模块
-                'worker',
-                'account_manager', 
-                'downloader',
-                'uploader',
-                'api_endpoints',
-                'xbogus',
-                'main_window',
-                'gui',
+                # 项目核心模块（使用完整路径）
+                'src.worker',
+                'src.account_manager', 
+                'src.downloader',
+                'src.uploader',
+                'src.api_endpoints',
+                'src.xbogus',
+                'src.main_window',
+                'src.gui',
+                'src.main',
                 # 配置模块
                 'config',
                 'config.config',
-                # PySide6相关
-                'PySide6.QtCore',
-                'PySide6.QtWidgets',
-                'PySide6.QtGui',
                 # 第三方核心模块
                 'requests',
                 'requests.adapters',
@@ -157,7 +167,11 @@ jobs:
                 'queue',
             ],
             hookspath=[],
-            hooksconfig={},
+            hooksconfig={
+                'PySide6': {
+                    'include_plugins': ['platforms', 'imageformats', 'iconengines']
+                }
+            },
             runtime_hooks=['runtime_hook_playwright.py'],
             excludes=[
                 'tkinter',
