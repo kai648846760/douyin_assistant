@@ -131,13 +131,16 @@ python gui_main.py
 ```
 然后在图形界面中进行操作：
 - 管理账号：添加账号、更新Cookie
-  <img width="1700" height="1456" alt="image" src="https://github.com/user-attachments/assets/fe408037-2055-4547-bbc6-a87bb3b0eef6" />
+  <img width="2800" height="1838" alt="image" src="https://github.com/user-attachments/assets/fcbc264d-9a41-4aac-b56d-0c6a9fbc4441" />
+
   
 - 下载视频：选择模式、输入URL、开始下载
-  <img width="1700" height="1456" alt="image" src="https://github.com/user-attachments/assets/b9b3bc89-cd46-4b99-be76-eca75890155a" />
+  <img width="2800" height="1838" alt="image" src="https://github.com/user-attachments/assets/98c515ea-cf9d-4afd-9f55-6664c6318af1" />
+
 
 - 上传视频：选择视频文件、设置参数、批量上传
-  <img width="1700" height="1456" alt="image" src="https://github.com/user-attachments/assets/5eca4bb3-6801-4775-89a9-4dced0b032fa" />
+  <img width="2800" height="1838" alt="image" src="https://github.com/user-attachments/assets/aa235e1b-5afc-434e-b813-423ed023811e" />
+
 
 
 
