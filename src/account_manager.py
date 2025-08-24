@@ -30,11 +30,16 @@ class AccountManager:
 
         for path in possible_paths:
             if os.path.exists(path):
-                print(f"找到账号配置文件: {path}")
+                # 只在第一次创建时输出，避免重复信息
+                if not hasattr(AccountManager, '_config_found'):
+                    print(f"找到账号配置文件: {path}")
+                    AccountManager._config_found = True
                 return path
 
         # 如果都没有找到，默认在根目录创建
-        print("未找到账号配置文件，将在根目录创建新的accounts.json")
+        if not hasattr(AccountManager, '_config_found'):
+            print("未找到账号配置文件，将在根目录创建新的accounts.json")
+            AccountManager._config_found = True
         return 'accounts.json'
 
     def _load_accounts(self) -> List[Dict]:
