@@ -36,14 +36,14 @@ class MainWindowCTK(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        # 设置主题和外观
-        ctk.set_appearance_mode("dark")  # 暗色主题
-        ctk.set_default_color_theme("blue")  # 蓝色主题
+        # 设置主题和外观 - 现代化深色主题
+        ctk.set_appearance_mode("dark")
+        ctk.set_default_color_theme("dark-blue")
 
-        # 设置窗口属性
-        self.title("抖音全能助手 by Loki Wang")
-        self.geometry("1000x900")
-        self.minsize(900, 800)
+        # 设置窗口属性 - 更大更现代的界面
+        self.title("🎬 抖音全能助手 - 现代化版本 by Loki Wang")
+        self.geometry("1400x950")
+        self.minsize(1200, 850)
 
         # 设置窗口图标（如果存在）
         try:
@@ -76,301 +76,495 @@ class MainWindowCTK(ctk.CTk):
         self.worker.finished_callback = self.on_task_finished
 
     def create_widgets(self):
-        """创建所有UI组件"""
-        # 主容器
-        main_frame = ctk.CTkFrame(self)
-        main_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        """创建现代化左右分栏布局"""
+        # 主容器 - 现代化设计
+        main_frame = ctk.CTkFrame(self, fg_color="transparent")
+        main_frame.pack(fill="both", expand=True, padx=15, pady=15)
 
-        # 创建选项卡区域 - 增加高度以确保底部内容可见
-        self.tabview = ctk.CTkTabview(main_frame, height=520)
-        self.tabview.pack(fill="x", padx=10, pady=(10, 0))
+        # 创建左右分栏容器
+        content_container = ctk.CTkFrame(main_frame, fg_color="transparent")
+        content_container.pack(fill="both", expand=True)
 
-        # 设置选项卡字体
+        # 左侧功能区域 - 占用60%宽度
+        self.left_panel = ctk.CTkFrame(content_container, corner_radius=15, 
+                                      fg_color=("#1a1a1a", "#0d0d0d"), 
+                                      border_width=1, border_color=("#404040", "#2a2a2a"))
+        self.left_panel.pack(side="left", fill="both", expand=True, padx=(0, 10))
+
+        # 右侧信息区域 - 固定宽度450px
+        self.right_panel = ctk.CTkFrame(content_container, width=450, corner_radius=15,
+                                       fg_color=("#1a1a1a", "#0d0d0d"),
+                                       border_width=1, border_color=("#404040", "#2a2a2a"))
+        self.right_panel.pack(side="right", fill="y", padx=(10, 0))
+        self.right_panel.pack_propagate(False)
+
+        # 创建左侧功能选项卡
+        self.create_left_panel()
+        
+        # 创建右侧信息面板
+        self.create_right_panel()
+
+    def create_left_panel(self):
+        """创建左侧功能区域"""
+        # 标题区域
+        title_frame = ctk.CTkFrame(self.left_panel, fg_color="transparent")
+        title_frame.pack(fill="x", padx=20, pady=(20, 10))
+        
+        title_label = ctk.CTkLabel(title_frame, text="🎬 抖音全能助手", 
+                                  font=ctk.CTkFont(size=24, weight="bold"))
+        title_label.pack(side="left")
+        
+        subtitle_label = ctk.CTkLabel(title_frame, text="现代化管理界面", 
+                                     font=ctk.CTkFont(size=14), 
+                                     text_color=("#888888", "#666666"))
+        subtitle_label.pack(side="left", padx=(15, 0), pady=(5, 0))
+
+        # 创建选项卡区域 - 现代化风格，去掉固定高度
+        self.tabview = ctk.CTkTabview(self.left_panel,
+                                     corner_radius=12,
+                                     segmented_button_fg_color=("#2d2d2d", "#1f1f1f"),
+                                     segmented_button_selected_color=("#1f538d", "#14375e"),
+                                     segmented_button_selected_hover_color=("#1f538d", "#14375e"))
+        self.tabview.pack(fill="both", expand=True, padx=20, pady=(10, 20))
+
+        # 设置选项卡字体 - 更现代化
         self.tabview._segmented_button.configure(
-            font=ctk.CTkFont(size=13, weight="bold"))
+            font=ctk.CTkFont(size=15, weight="bold"),
+            height=45
+        )
 
-        # 添加选项卡
-        self.tab_account = self.tabview.add("① 账号管理")
-        self.tab_download = self.tabview.add("② 视频下载")
-        self.tab_upload = self.tabview.add("③ 视频上传")
+        # 添加选项卡 - 使用更直观的图标
+        self.tab_account = self.tabview.add("👤 账号管理")
+        self.tab_download = self.tabview.add("⬇️ 视频下载")
+        self.tab_upload = self.tabview.add("⬆️ 视频上传")
 
         # 创建各个选项卡的内容
         self.create_account_tab()
         self.create_download_tab()
         self.create_upload_tab()
 
-        # 日志区域 - 固定高度，确保始终可见，增加明显的视觉边界
-        log_frame = ctk.CTkFrame(main_frame, corner_radius=10, fg_color=(
-            "#2b2b2b", "#1a1a1a"), border_width=2, border_color=("#404040", "#303030"))
-        log_frame.pack(fill="x", padx=10, pady=10)
-
-        # 日志内容区域 - 增加高度并添加明显边框
-        self.log_text = ctk.CTkTextbox(log_frame, height=180, font=ctk.CTkFont(
-            family="Monaco", size=11), corner_radius=8, border_width=1, border_color=("#606060", "#404040"))
-        self.log_text.pack(fill="x", padx=8, pady=8)
-
-        # 添加欢迎信息
-        welcome_msg = "🎉 欢迎使用抖音全能助手！\n📌 请先在账号管理页面配置您的账号信息\n🚀 然后就可以开始下载或上传视频了\n\n"
-        self.log_text.insert("1.0", welcome_msg)
-
-        # 底部状态栏
-        status_frame = ctk.CTkFrame(main_frame, corner_radius=10)
-        status_frame.pack(fill="x", padx=10, pady=(0, 10))
-
-        # 状态指示器
-        status_container = ctk.CTkFrame(status_frame, fg_color="transparent")
-        status_container.pack(side="left", fill="x",
-                              expand=True, padx=8, pady=6)
-
-        status_indicator = ctk.CTkLabel(
-            status_container, text="🟢", font=ctk.CTkFont(size=14))
+    def create_right_panel(self):
+        """创建右侧信息面板"""
+        # 系统状态区域
+        status_section = ctk.CTkFrame(self.right_panel, corner_radius=12,
+                                     fg_color=("#242424", "#1a1a1a"))
+        status_section.pack(fill="x", padx=15, pady=(20, 10))
+        
+        status_title = ctk.CTkLabel(status_section, text="📊 系统状态",
+                                   font=ctk.CTkFont(size=16, weight="bold"))
+        status_title.pack(anchor="w", padx=15, pady=(12, 8))
+        
+        # 状态��态指示器
+        status_content = ctk.CTkFrame(status_section, fg_color="transparent")
+        status_content.pack(fill="x", padx=15, pady=(0, 12))
+        
+        status_indicator = ctk.CTkLabel(status_content, text="🟢", 
+                                       font=ctk.CTkFont(size=16))
         status_indicator.pack(side="left")
+        
+        self.status_label = ctk.CTkLabel(status_content, text="系统运行正常",
+                                        font=ctk.CTkFont(size=13))
+        self.status_label.pack(side="left", padx=(8, 0))
+        
+        # 实时日志区域
+        log_section = ctk.CTkFrame(self.right_panel, corner_radius=12,
+                                  fg_color=("#242424", "#1a1a1a"))
+        log_section.pack(fill="both", expand=True, padx=15, pady=(10, 10))
+        
+        log_title = ctk.CTkLabel(log_section, text="📝 实时日志",
+                                font=ctk.CTkFont(size=16, weight="bold"))
+        log_title.pack(anchor="w", padx=15, pady=(12, 8))
+        
+        # 日志内容区域 - 现代化设计和优化显示
+        self.log_text = ctk.CTkTextbox(log_section, 
+                                      font=ctk.CTkFont(family="JetBrains Mono", size=11),
+                                      corner_radius=8,
+                                      border_width=1,
+                                      border_color=("#404040", "#303030"),
+                                      fg_color=("#1e1e1e", "#121212"),
+                                      text_color=("#e0e0e0", "#c0c0c0"),
+                                      wrap="word")  # 启用自动换行
+        self.log_text.pack(fill="both", expand=True, padx=15, pady=(0, 12))
+        
+        # 配置日志文本框的显示属性
+        self._configure_log_display()
+    
+    def _configure_log_display(self):
+        """配置日志显示的详细属性"""
+        try:
+            # 获取底层的tkinter Text组件
+            text_widget = self.log_text._textbox
+            
+            # 配置文本显示属性
+            text_widget.configure(
+                wrap='word',  # 按单词换行
+                spacing1=2,   # 段落上间距
+                spacing2=1,   # 行间距
+                spacing3=2,   # 段落下间距
+                padx=8,       # 左右内边距
+                pady=8        # 上下内边距
+            )
+            
+        except Exception as e:
+            print(f"配置日志显示错误: {e}")
+        
+        # 简洁欢迎信息
+        welcome_msg = "🎉 抖音全能助手已启动，系统就绪\n\n"
+        self.log_text.insert("1.0", welcome_msg)
+        self.log_text.see("end")
 
-        self.status_label = ctk.CTkLabel(
-            status_container, text="系统就绪", font=ctk.CTkFont(size=12))
-        self.status_label.pack(side="left", padx=(5, 0))
-
-        # 版本信息和作者
-        info_container = ctk.CTkFrame(status_frame, fg_color="transparent")
-        info_container.pack(side="right", padx=8, pady=6)
-
-        version_label = ctk.CTkLabel(
-            info_container, text="📱 抖音全能助手 v1.0.0", font=ctk.CTkFont(size=10))
-        version_label.pack(side="top")
-
-        author_label = ctk.CTkLabel(
-            info_container, text="👨‍💻 by Loki Wang", font=ctk.CTkFont(size=10))
-        author_label.pack(side="top")
+        # 底部信息区域
+        info_section = ctk.CTkFrame(self.right_panel, corner_radius=12,
+                                   fg_color=("#242424", "#1a1a1a"))
+        info_section.pack(fill="x", padx=15, pady=(10, 20))
+        
+        # 版本信息
+        version_frame = ctk.CTkFrame(info_section, fg_color="transparent")
+        version_frame.pack(fill="x", padx=15, pady=12)
+        
+        version_label = ctk.CTkLabel(version_frame, text="📱 抖音全能助手 v2.0.0",
+                                    font=ctk.CTkFont(size=12, weight="bold"))
+        version_label.pack(anchor="w")
+        
+        author_label = ctk.CTkLabel(version_frame, text="👨‍💻 Powered by Loki Wang",
+                                   font=ctk.CTkFont(size=11),
+                                   text_color=("#888888", "#666666"))
+        author_label.pack(anchor="w", pady=(2, 0))
 
     def create_account_tab(self):
-        """创建账号管理选项卡"""
-        # 账号列表显示区域
-        list_frame = ctk.CTkFrame(self.tab_account)
-        list_frame.pack(fill="x", padx=10, pady=(10, 5))
-
-        list_label = ctk.CTkLabel(
-            list_frame, text="👥 已配置账号 (状态会实时更新)", font=ctk.CTkFont(size=13, weight="bold"))
-        list_label.pack(anchor="w", padx=10, pady=(8, 3))
-
-        self.account_list_text = ctk.CTkTextbox(list_frame, height=100)
-        self.account_list_text.pack(fill="x", padx=10, pady=(0, 8))
-
-        # 刷新按钮
-        refresh_btn = ctk.CTkButton(
-            list_frame, text="🔄 刷新账号列表", command=self.refresh_accounts, height=32)
-        refresh_btn.pack(pady=(0, 8))
-
-        # 添加账号区域
-        add_frame = ctk.CTkFrame(self.tab_account)
-        add_frame.pack(fill="x", padx=10, pady=5)
-
-        add_label = ctk.CTkLabel(
-            add_frame, text="➕ 添加新账号", font=ctk.CTkFont(size=13, weight="bold"))
-        add_label.pack(anchor="w", padx=10, pady=(8, 3))
-
-        input_frame = ctk.CTkFrame(add_frame)
-        input_frame.pack(fill="x", padx=10, pady=(0, 8))
-
-        self.new_account_name = ctk.CTkEntry(
-            input_frame, placeholder_text="账号名称 (必填)", height=32)
-        self.new_account_name.pack(
-            side="left", fill="x", expand=True, padx=(8, 4), pady=6)
-
-        self.new_account_remark = ctk.CTkEntry(
-            input_frame, placeholder_text="备注 (可选)", height=32)
-        self.new_account_remark.pack(
-            side="left", fill="x", expand=True, padx=4, pady=6)
-
-        add_btn = ctk.CTkButton(
-            input_frame, text="✅ 添加账号", command=self.add_account, height=32)
-        add_btn.pack(side="right", padx=(4, 8), pady=6)
-
-        # Cookie更新区域
-        cookie_frame = ctk.CTkFrame(self.tab_account)
-        cookie_frame.pack(fill="x", padx=10, pady=5)
-
-        cookie_label = ctk.CTkLabel(
-            cookie_frame, text="🍪 更新Cookie", font=ctk.CTkFont(size=13, weight="bold"))
-        cookie_label.pack(anchor="w", padx=10, pady=(8, 3))
-
-        cookie_input_frame = ctk.CTkFrame(cookie_frame)
-        cookie_input_frame.pack(fill="x", padx=10, pady=(0, 8))
-
-        ctk.CTkLabel(cookie_input_frame, text="选择账号:", font=ctk.CTkFont(
-            size=11)).pack(side="left", padx=(8, 4), pady=6)
-        self.cookie_account_combo = ctk.CTkComboBox(
-            cookie_input_frame, values=["无账号"], height=32)
-        self.cookie_account_combo.pack(side="left", padx=4, pady=6)
-
-        ctk.CTkLabel(cookie_input_frame, text="选择浏览器:", font=ctk.CTkFont(
-            size=11)).pack(side="left", padx=(8, 4), pady=6)
-        self.cookie_browser_combo = ctk.CTkComboBox(
-            cookie_input_frame, values=['chrome', 'firefox', 'edge', 'opera'], height=32)
-        self.cookie_browser_combo.pack(side="left", padx=4, pady=6)
-
-        self.update_cookie_btn = ctk.CTkButton(
-            cookie_input_frame, text="🔄 更新选中账号的Cookie", command=self.start_update_cookie, height=32)
-        self.update_cookie_btn.pack(side="right", padx=(4, 8), pady=6)
+        """创建账号管理选项卡 - 优化布局"""
+        # 主容器 - 使用垂直分布
+        container = ctk.CTkFrame(self.tab_account, fg_color="transparent")
+        container.pack(fill="both", expand=True, padx=10, pady=10)
+        
+        # 上半部分：账号列表和操作
+        top_section = ctk.CTkFrame(container, corner_radius=12, fg_color=("#2d2d2d", "#1f1f1f"))
+        top_section.pack(fill="both", expand=True, pady=(0, 10))
+        
+        # 账号列表头部
+        list_header = ctk.CTkFrame(top_section, fg_color="transparent")
+        list_header.pack(fill="x", padx=15, pady=(15, 10))
+        
+        list_title = ctk.CTkLabel(list_header, text="👥 账号管理中心", 
+                                 font=ctk.CTkFont(size=18, weight="bold"))
+        list_title.pack(side="left")
+        
+        refresh_btn = ctk.CTkButton(list_header, text="🔄 刷新", 
+                                   command=self.refresh_accounts,
+                                   width=80, height=32,
+                                   font=ctk.CTkFont(size=11, weight="bold"))
+        refresh_btn.pack(side="right")
+        
+        # 账号列表内容 - 增加高度，充分利用空间
+        self.account_list_text = ctk.CTkTextbox(top_section, height=200, 
+                                               font=ctk.CTkFont(family="JetBrains Mono", size=11),
+                                               corner_radius=8,
+                                               fg_color=("#1e1e1e", "#121212"))
+        self.account_list_text.pack(fill="x", padx=15, pady=(0, 15))
+        
+        # 下半部分：添加账号和Cookie管理 - 分成两列
+        bottom_section = ctk.CTkFrame(container, fg_color="transparent")
+        bottom_section.pack(fill="x")
+        
+        # 左列：添加账号
+        left_column = ctk.CTkFrame(bottom_section, corner_radius=12, fg_color=("#2d2d2d", "#1f1f1f"))
+        left_column.pack(side="left", fill="both", expand=True, padx=(0, 5))
+        
+        add_title = ctk.CTkLabel(left_column, text="➕ 添加新账号",
+                                font=ctk.CTkFont(size=16, weight="bold"))
+        add_title.pack(anchor="w", padx=15, pady=(15, 10))
+        
+        # 账号名称输入
+        name_frame = ctk.CTkFrame(left_column, fg_color="transparent")
+        name_frame.pack(fill="x", padx=15, pady=(0, 8))
+        
+        ctk.CTkLabel(name_frame, text="账号名称:", font=ctk.CTkFont(size=12)).pack(anchor="w", pady=(0, 4))
+        self.new_account_name = ctk.CTkEntry(name_frame, 
+                                            placeholder_text="请输入账号名称",
+                                            height=36, font=ctk.CTkFont(size=11))
+        self.new_account_name.pack(fill="x")
+        
+        # 备注输入
+        remark_frame = ctk.CTkFrame(left_column, fg_color="transparent")
+        remark_frame.pack(fill="x", padx=15, pady=(0, 15))
+        
+        ctk.CTkLabel(remark_frame, text="备注信息:", font=ctk.CTkFont(size=12)).pack(anchor="w", pady=(0, 4))
+        self.new_account_remark = ctk.CTkEntry(remark_frame, 
+                                              placeholder_text="可选，便于识别账号",
+                                              height=36, font=ctk.CTkFont(size=11))
+        self.new_account_remark.pack(fill="x")
+        
+        # 添加按钮
+        add_btn = ctk.CTkButton(left_column, text="✅ 添加账号", 
+                               command=self.add_account,
+                               height=40, font=ctk.CTkFont(size=12, weight="bold"),
+                               fg_color=("#1f538d", "#14375e"),
+                               hover_color=("#2d5aa0", "#1a4168"))
+        add_btn.pack(padx=15, pady=(0, 15))
+        
+        # 右列：Cookie更新
+        right_column = ctk.CTkFrame(bottom_section, corner_radius=12, fg_color=("#2d2d2d", "#1f1f1f"))
+        right_column.pack(side="right", fill="both", expand=True, padx=(5, 0))
+        
+        cookie_title = ctk.CTkLabel(right_column, text="🍪 Cookie管理",
+                                   font=ctk.CTkFont(size=16, weight="bold"))
+        cookie_title.pack(anchor="w", padx=15, pady=(15, 10))
+        
+        # 账号选择
+        account_frame = ctk.CTkFrame(right_column, fg_color="transparent")
+        account_frame.pack(fill="x", padx=15, pady=(0, 8))
+        
+        ctk.CTkLabel(account_frame, text="选择账号:", font=ctk.CTkFont(size=12)).pack(anchor="w", pady=(0, 4))
+        self.cookie_account_combo = ctk.CTkComboBox(account_frame, values=["无账号"],
+                                                   height=36, font=ctk.CTkFont(size=11))
+        self.cookie_account_combo.pack(fill="x")
+        
+        # 浏览器选择
+        browser_frame = ctk.CTkFrame(right_column, fg_color="transparent")
+        browser_frame.pack(fill="x", padx=15, pady=(0, 15))
+        
+        ctk.CTkLabel(browser_frame, text="选择浏览器:", font=ctk.CTkFont(size=12)).pack(anchor="w", pady=(0, 4))
+        self.cookie_browser_combo = ctk.CTkComboBox(browser_frame, 
+                                                   values=['chrome', 'firefox', 'edge', 'opera'],
+                                                   height=36, font=ctk.CTkFont(size=11))
+        self.cookie_browser_combo.pack(fill="x")
+        self.cookie_browser_combo.set('chrome')  # 设置默认值
+        
+        # 更新按钮
+        self.update_cookie_btn = ctk.CTkButton(right_column, text="🔄 更新Cookie",
+                                              command=self.start_update_cookie,
+                                              height=40, font=ctk.CTkFont(size=12, weight="bold"),
+                                              fg_color=("#d97706", "#92400e"),
+                                              hover_color=("#f59e0b", "#a16207"))
+        self.update_cookie_btn.pack(padx=15, pady=(0, 15))
 
     def create_download_tab(self):
-        """创建视频下载选项卡"""
-        # 下载配置区域
-        config_frame = ctk.CTkFrame(self.tab_download)
-        config_frame.pack(fill="x", padx=10, pady=(10, 5))
-
-        config_label = ctk.CTkLabel(
-            config_frame, text="⚙️ 下载配置", font=ctk.CTkFont(size=13, weight="bold"))
-        config_label.pack(anchor="w", padx=10, pady=(8, 3))
-
-        # 账号选择
-        account_frame = ctk.CTkFrame(config_frame)
-        account_frame.pack(fill="x", padx=10, pady=3)
-
-        ctk.CTkLabel(account_frame, text="选择下载账号 (仅显示Cookie可用的账号):", font=ctk.CTkFont(
-            size=11)).pack(anchor="w", padx=8, pady=(6, 2))
-        self.download_account_combo = ctk.CTkComboBox(
-            account_frame, values=["无可用账号"], height=32)
-        self.download_account_combo.pack(fill="x", padx=8, pady=(0, 6))
-
-        # 模式选择
-        mode_frame = ctk.CTkFrame(config_frame)
-        mode_frame.pack(fill="x", padx=10, pady=3)
-
-        ctk.CTkLabel(mode_frame, text="选择下载模式:", font=ctk.CTkFont(
-            size=11)).pack(anchor="w", padx=8, pady=(6, 2))
-        self.download_mode_combo = ctk.CTkComboBox(mode_frame, values=list(
-            self.DOWNLOAD_MODES.keys()), command=self.toggle_download_url_input, height=32)
-        self.download_mode_combo.pack(fill="x", padx=8, pady=(0, 6))
-
-        # URL输入
-        url_frame = ctk.CTkFrame(config_frame)
-        url_frame.pack(fill="x", padx=10, pady=3)
-
-        ctk.CTkLabel(url_frame, text="目标URL:", font=ctk.CTkFont(
-            size=11)).pack(anchor="w", padx=8, pady=(6, 2))
-        self.download_url_entry = ctk.CTkEntry(
-            url_frame, placeholder_text="", height=32)
-        self.download_url_entry.pack(fill="x", padx=8, pady=(0, 6))
-
-        # 路径选择
-        path_frame = ctk.CTkFrame(config_frame)
-        path_frame.pack(fill="x", padx=10, pady=(3, 8))
-
-        ctk.CTkLabel(path_frame, text="自定义保存路径 (可选):", font=ctk.CTkFont(
-            size=11)).pack(anchor="w", padx=8, pady=(6, 2))
-
-        path_input_frame = ctk.CTkFrame(path_frame)
-        path_input_frame.pack(fill="x", padx=8, pady=(0, 6))
-
-        self.download_path_entry = ctk.CTkEntry(
-            path_input_frame, placeholder_text="默认为程序目录下的 downloads 文件夹", height=32)
-        self.download_path_entry.pack(
-            side="left", fill="x", expand=True, padx=(6, 3), pady=4)
-
-        browse_btn = ctk.CTkButton(
-            path_input_frame, text="📁 浏览...", command=self.browse_download_path, height=32)
-        browse_btn.pack(side="right", padx=(3, 6), pady=4)
-
-        # 下载按钮区域
-        button_frame = ctk.CTkFrame(self.tab_download)
-        button_frame.pack(fill="x", padx=10, pady=5)
-
-        btn_container = ctk.CTkFrame(button_frame)
-        btn_container.pack(pady=12)
-
-        self.download_btn = ctk.CTkButton(
-            btn_container, text="⬇️ 开始下载", command=self.start_download, width=130, height=36)
-        self.download_btn.pack(side="left", padx=(0, 8))
-
-        self.stop_download_btn = ctk.CTkButton(
-            btn_container, text="⏹️ 停止下载", command=self.stop_download, width=130, height=36, state="disabled")
+        """创建视频下载选项卡 - 优化布局"""
+        # 主容器
+        container = ctk.CTkFrame(self.tab_download, fg_color="transparent")
+        container.pack(fill="both", expand=True, padx=10, pady=10)
+        
+        # 上半部分：下载配置区域
+        config_section = ctk.CTkFrame(container, corner_radius=12, fg_color=("#2d2d2d", "#1f1f1f"))
+        config_section.pack(fill="both", expand=True, pady=(0, 10))
+        
+        config_title = ctk.CTkLabel(config_section, text="⚙️ 下载配置中心",
+                                   font=ctk.CTkFont(size=18, weight="bold"))
+        config_title.pack(anchor="w", padx=20, pady=(20, 15))
+        
+        # 配置内容主区域
+        config_main = ctk.CTkFrame(config_section, fg_color="transparent")
+        config_main.pack(fill="both", expand=True, padx=20, pady=(0, 20))
+        
+        # 第一行：账号和模式选择
+        row1 = ctk.CTkFrame(config_main, fg_color="transparent")
+        row1.pack(fill="x", pady=(0, 15))
+        
+        # 左列：账号选择
+        account_col = ctk.CTkFrame(row1, fg_color="transparent")
+        account_col.pack(side="left", fill="both", expand=True, padx=(0, 10))
+        
+        ctk.CTkLabel(account_col, text="下载账号：", 
+                    font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w", pady=(0, 8))
+        ctk.CTkLabel(account_col, text="仅显示Cookie可用的账号", 
+                    font=ctk.CTkFont(size=11), text_color=("#888888", "#666666")).pack(anchor="w", pady=(0, 5))
+        self.download_account_combo = ctk.CTkComboBox(account_col, values=["无可用账号"],
+                                                     height=40, font=ctk.CTkFont(size=12))
+        self.download_account_combo.pack(fill="x")
+        
+        # 右列：模式选择
+        mode_col = ctk.CTkFrame(row1, fg_color="transparent")
+        mode_col.pack(side="right", fill="both", expand=True, padx=(10, 0))
+        
+        ctk.CTkLabel(mode_col, text="下载模式：", 
+                    font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w", pady=(0, 8))
+        ctk.CTkLabel(mode_col, text="选择您需要的下载类型", 
+                    font=ctk.CTkFont(size=11), text_color=("#888888", "#666666")).pack(anchor="w", pady=(0, 5))
+        self.download_mode_combo = ctk.CTkComboBox(mode_col, values=list(self.DOWNLOAD_MODES.keys()),
+                                                  command=self.toggle_download_url_input,
+                                                  height=40, font=ctk.CTkFont(size=12))
+        self.download_mode_combo.pack(fill="x")
+        
+        # 第二行：URL输入
+        row2 = ctk.CTkFrame(config_main, fg_color="transparent")
+        row2.pack(fill="x", pady=(0, 15))
+        
+        ctk.CTkLabel(row2, text="目标URL：", 
+                    font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w", pady=(0, 8))
+        ctk.CTkLabel(row2, text="请输入对应的抖音链接地址", 
+                    font=ctk.CTkFont(size=11), text_color=("#888888", "#666666")).pack(anchor="w", pady=(0, 5))
+        self.download_url_entry = ctk.CTkEntry(row2, placeholder_text="",
+                                              height=40, font=ctk.CTkFont(size=12))
+        self.download_url_entry.pack(fill="x")
+        
+        # 第三行：保存路径
+        row3 = ctk.CTkFrame(config_main, fg_color="transparent")
+        row3.pack(fill="x")
+        
+        ctk.CTkLabel(row3, text="保存路径：", 
+                    font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w", pady=(0, 8))
+        ctk.CTkLabel(row3, text="自定义保存位置，留空则使用默认目录", 
+                    font=ctk.CTkFont(size=11), text_color=("#888888", "#666666")).pack(anchor="w", pady=(0, 5))
+        
+        path_frame = ctk.CTkFrame(row3, fg_color="transparent")
+        path_frame.pack(fill="x")
+        
+        self.download_path_entry = ctk.CTkEntry(path_frame,
+                                               placeholder_text="默认为程序目录下的 downloads 文件夹",
+                                               height=40, font=ctk.CTkFont(size=12))
+        self.download_path_entry.pack(side="left", fill="x", expand=True, padx=(0, 10))
+        
+        browse_btn = ctk.CTkButton(path_frame, text="📁 浏览",
+                                  command=self.browse_download_path,
+                                  width=100, height=40,
+                                  font=ctk.CTkFont(size=12, weight="bold"))
+        browse_btn.pack(side="right")
+        
+        # 下半部分：操作按钮区域
+        action_section = ctk.CTkFrame(container, corner_radius=12, fg_color=("#2d2d2d", "#1f1f1f"))
+        action_section.pack(fill="x")
+        
+        action_title = ctk.CTkLabel(action_section, text="🚀 操作控制中心",
+                                   font=ctk.CTkFont(size=18, weight="bold"))
+        action_title.pack(anchor="w", padx=20, pady=(20, 15))
+        
+        # 按钮区域
+        button_container = ctk.CTkFrame(action_section, fg_color="transparent")
+        button_container.pack(padx=20, pady=(0, 20))
+        
+        self.download_btn = ctk.CTkButton(button_container, text="⬇️ 开始下载",
+                                         command=self.start_download,
+                                         width=160, height=50,
+                                         font=ctk.CTkFont(size=16, weight="bold"),
+                                         fg_color=("#059669", "#047857"),
+                                         hover_color=("#10b981", "#059669"))
+        self.download_btn.pack(side="left", padx=(0, 15))
+        
+        self.stop_download_btn = ctk.CTkButton(button_container, text="⏹️ 停止下载",
+                                              command=self.stop_download,
+                                              width=160, height=50,
+                                              font=ctk.CTkFont(size=16, weight="bold"),
+                                              state="disabled",
+                                              fg_color=("#dc2626", "#b91c1c"),
+                                              hover_color=("#ef4444", "#dc2626"))
         self.stop_download_btn.pack(side="left")
-
+        
         # 初始化URL输入框状态
         self.toggle_download_url_input(list(self.DOWNLOAD_MODES.keys())[0])
 
     def create_upload_tab(self):
-        """创建视频上传选项卡 - 大胆优化视频显示区域"""
-        # 创建主要内容区域，确保有足够高度显示所有组件包括上传按钮
-        content_frame = ctk.CTkFrame(self.tab_upload, height=450)
-        content_frame.pack(fill="x", padx=10, pady=5)
-        content_frame.pack_propagate(False)
-
-        # 账号选择区域 - 适度压缩
-        account_frame = ctk.CTkFrame(content_frame)
-        account_frame.pack(fill="x", padx=5, pady=(4, 1))
-
-        account_label = ctk.CTkLabel(
-            account_frame, text="👤 选择上传账号 (可多选):", font=ctk.CTkFont(size=11, weight="bold"))
-        account_label.pack(anchor="w", padx=5, pady=(3, 2))
-
-        # 账号列表 - 大幅压缩为视频区域让出更多空间
-        self.upload_account_frame = ctk.CTkScrollableFrame(
-            account_frame)
-        self.upload_account_frame.pack(fill="x", padx=8, pady=(0, 2))
-        # 绑定鼠标滚轮事件
-        self.upload_account_frame.bind_all(
-            "<MouseWheel>", self._on_mousewheel_account)
-        self.upload_account_frame.bind_all(
-            "<Button-4>", self._on_mousewheel_account)
-        self.upload_account_frame.bind_all(
-            "<Button-5>", self._on_mousewheel_account)
-
-        # 视频选择区域
-        video_frame = ctk.CTkFrame(content_frame)
-        video_frame.pack(fill="x", padx=8, pady=3)
-
-        # 按钮区域 - 浏览和上传按钮放在同一行
-        button_frame = ctk.CTkFrame(video_frame)
-        button_frame.pack(fill="x", padx=8, pady=(5, 3))
-
-        browse_btn = ctk.CTkButton(
-            button_frame, text="📁 选择视频", command=self.browse_and_list_videos, height=30)
-        browse_btn.pack(side="left", padx=(8, 4))
-
-        # 上传按钮与浏览按钮在同一行
-        self.upload_btn = ctk.CTkButton(
-            button_frame, text="🚀 上传视频", command=self.start_upload, height=30)
-        self.upload_btn.pack(side="left", padx=(4, 8))
-
-        video_label = ctk.CTkLabel(
-            video_frame, text="🎬 请勾选需要上传的视频 (文件名格式: 标题 #标签1 #标签2.mp4):", font=ctk.CTkFont(size=10))
-        video_label.pack(anchor="w", padx=8, pady=2)
-
-        # 视频列表区域 - 大幅扩大高度确保视频列表清晰可见
-        self.video_list_frame = ctk.CTkScrollableFrame(video_frame, height=150)
-        self.video_list_frame.pack(fill="x", padx=8, pady=(0, 5))
-        # 绑定鼠标滚轮事件
-        self.video_list_frame.bind_all(
-            "<MouseWheel>", self._on_mousewheel_video)
-        self.video_list_frame.bind_all("<Button-4>", self._on_mousewheel_video)
-        self.video_list_frame.bind_all("<Button-5>", self._on_mousewheel_video)
-
-        # 通用标签区域
-        tags_frame = ctk.CTkFrame(content_frame)
-        tags_frame.pack(fill="x", padx=8, pady=2)
-
-        tags_label = ctk.CTkLabel(
-            tags_frame, text="🏷️ 通用话题标签 (可选):", font=ctk.CTkFont(size=10))
-        tags_label.pack(anchor="w", padx=8, pady=(4, 2))
-
-        self.common_tags_entry = ctk.CTkEntry(
-            tags_frame, placeholder_text="为本次上传的所有视频都添加的通用标签, e.g., 原创,教程", height=28)
-        self.common_tags_entry.pack(fill="x", padx=8, pady=(0, 4))
-
-        # 上传按钮已移动到视频区域与浏览按钮同行
+        """创建视频上传选项卡 - 紧凑设计"""
+        # 主容器 - 去掉滚动
+        container = ctk.CTkFrame(self.tab_upload, fg_color="transparent")
+        container.pack(fill="both", expand=True, padx=10, pady=10)
+        
+        # 账号选择卡片 - 紧凑设计
+        account_card = ctk.CTkFrame(container, corner_radius=12, fg_color=("#2d2d2d", "#1f1f1f"))
+        account_card.pack(fill="x", pady=(0, 10))
+        
+        account_title = ctk.CTkLabel(account_card, text="👤 上传账号选择",
+                                    font=ctk.CTkFont(size=16, weight="bold"))
+        account_title.pack(anchor="w", padx=15, pady=(10, 5))
+        
+        # 账号列表区域 - 减少高度
+        self.upload_account_frame = ctk.CTkScrollableFrame(account_card, height=70)
+        self.upload_account_frame.pack(fill="x", padx=15, pady=(0, 10))
+        
+        # 视频选择卡片 - 紧凑设计
+        video_card = ctk.CTkFrame(container, corner_radius=12, fg_color=("#2d2d2d", "#1f1f1f"))
+        video_card.pack(fill="x", pady=(0, 10))
+        
+        video_title = ctk.CTkLabel(video_card, text="🎥 视频文件选择",
+                                  font=ctk.CTkFont(size=16, weight="bold"))
+        video_title.pack(anchor="w", padx=15, pady=(10, 8))
+        
+        # 按钮区域 - 紧凑设计
+        video_buttons = ctk.CTkFrame(video_card, fg_color="transparent")
+        video_buttons.pack(fill="x", padx=15, pady=(0, 8))
+        
+        browse_btn = ctk.CTkButton(video_buttons, text="📁 选择文件夹",
+                                  command=self.browse_and_list_videos,
+                                  height=32, font=ctk.CTkFont(size=11, weight="bold"),
+                                  fg_color=("#7c3aed", "#5b21b6"),
+                                  hover_color=("#8b5cf6", "#6d28d9"),
+                                  width=120)
+        browse_btn.pack(side="left", padx=(0, 8))
+        
+        self.upload_btn = ctk.CTkButton(video_buttons, text="🚀 开始上传",
+                                       command=self.start_upload,
+                                       height=32, font=ctk.CTkFont(size=11, weight="bold"),
+                                       fg_color=("#059669", "#047857"),
+                                       hover_color=("#10b981", "#059669"),
+                                       width=120)
+        self.upload_btn.pack(side="left")
+        
+        # 视频列表区域 - 减少高度
+        self.video_list_frame = ctk.CTkScrollableFrame(video_card, height=120)
+        self.video_list_frame.pack(fill="x", padx=15, pady=(0, 10))
+        
+        # 通用标签卡片 - 紧凑设计
+        tags_card = ctk.CTkFrame(container, corner_radius=12, fg_color=("#2d2d2d", "#1f1f1f"))
+        tags_card.pack(fill="x")
+        
+        tags_title = ctk.CTkLabel(tags_card, text="🏷️ 通用话题标签",
+                                 font=ctk.CTkFont(size=16, weight="bold"))
+        tags_title.pack(anchor="w", padx=15, pady=(10, 8))
+        
+        self.common_tags_entry = ctk.CTkEntry(tags_card,
+                                             placeholder_text="例如：原创,教程,编程,科技",
+                                             height=32, font=ctk.CTkFont(size=11))
+        self.common_tags_entry.pack(fill="x", padx=15, pady=(0, 10))
 
     def append_log(self, text):
-        """向日志框追加文本"""
+        """向日志框追加文本 - 优化显示格式"""
         def update_log():
-            self.log_text.insert("end", text)
-            self.log_text.see("end")
+            try:
+                # 处理文本格式
+                if text.strip():  # 只处理非空文本
+                    # 确保文本以换行结尾，但不重复添加
+                    formatted_text = text.rstrip() + '\n'
+                    
+                    # 在末尾插入文本
+                    self.log_text.insert("end", formatted_text)
+                    
+                    # 自动滚动到最新内容
+                    self.log_text.see("end")
+                    
+                    # 限制日志长度，防止内存溢出
+                    self._limit_log_lines()
+                    
+            except Exception as e:
+                # 如果日志显示出错，不要影响主程序
+                print(f"日志显示错误: {e}")
 
         # 确保在主线程中更新UI
         if threading.current_thread() == threading.main_thread():
             update_log()
         else:
             self.after(0, update_log)
+    
+    def _limit_log_lines(self, max_lines=1000):
+        """限制日志行数，防止内存溢出"""
+        try:
+            # 获取当前内容
+            content = self.log_text.get("1.0", "end")
+            lines = content.split('\n')
+            
+            # 如果超过最大行数，删除旧内容
+            if len(lines) > max_lines:
+                # 保留最后 max_lines - 100 行
+                keep_lines = max_lines - 100
+                new_content = '\n'.join(lines[-keep_lines:])
+                
+                # 清除并重新设置内容
+                self.log_text.delete("1.0", "end")
+                self.log_text.insert("1.0", new_content)
+                
+                # 滚动到最底部
+                self.log_text.see("end")
+                
+        except Exception as e:
+            print(f"日志清理错误: {e}")
 
     def on_task_finished(self, msg_type, message):
         """任务完成回调"""
@@ -746,27 +940,7 @@ class MainWindowCTK(ctk.CTk):
             self.append_log(f"停止下载时发生错误: {e}\n")
             self.stop_download_btn.configure(state="disabled")
 
-    def _on_mousewheel_account(self, event):
-        """账号列表鼠标滚轮事件处理"""
-        if hasattr(self, 'upload_account_frame') and self.upload_account_frame.winfo_exists():
-            # Windows和macOS的滚轮事件处理
-            if event.delta:
-                delta = event.delta
-            else:
-                delta = -40 if event.num == 5 else 40
-            self.upload_account_frame._parent_canvas.yview_scroll(
-                int(-1 * (delta / 120)), "units")
 
-    def _on_mousewheel_video(self, event):
-        """视频列表鼠标滚轮事件处理"""
-        if hasattr(self, 'video_list_frame') and self.video_list_frame.winfo_exists():
-            # Windows和macOS的滚轮事件处理
-            if event.delta:
-                delta = event.delta
-            else:
-                delta = -40 if event.num == 5 else 40
-            self.video_list_frame._parent_canvas.yview_scroll(
-                int(-1 * (delta / 120)), "units")
 
     def on_closing(self):
         """关闭窗口时的清理工作"""
@@ -782,14 +956,29 @@ class MainWindowCTK(ctk.CTk):
 
 
 class LogRedirector:
-    """日志重定向器"""
+    """日志重定向器 - 优化版本"""
 
     def __init__(self, callback):
         self.callback = callback
+        self.buffer = []
 
     def write(self, text):
-        if text.strip():  # 只有非空文本才输出
-            self.callback(text)
+        if text and text.strip():  # 只处理非空文本
+            # 处理特殊字符和格式
+            formatted_text = self._format_text(text)
+            if formatted_text:
+                self.callback(formatted_text)
+    
+    def _format_text(self, text):
+        """格式化文本输出"""
+        # 删除多余的空白字符
+        text = text.strip()
+        
+        # 如果文本为空，跳过
+        if not text:
+            return None
+            
+        return text
 
     def flush(self):
         pass
