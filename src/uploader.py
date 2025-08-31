@@ -62,14 +62,44 @@ def ensure_playwright_browsers():
         
         # 如果浏览器不可用，尝试安装
         console.print("[yellow]检测到Playwright浏览器未安装，正在自动安装...[/yellow]")
-        result = subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], 
-                              capture_output=True, text=True, timeout=300)
         
-        if result.returncode == 0:
-            console.print("[green]Playwright浏览器安装成功！[/green]")
-            return True
-        else:
-            console.print(f"[red]Playwright浏览器安装失败: {result.stderr}[/red]")
+        try:
+            # 使用更友好的方式执行安装命令，显示实时进度
+            console.print("[blue]正在下载Chromium浏览器（约150MB），请耐心等待...[/blue]")
+            
+            # 创建子进程并实时显示输出
+            process = subprocess.Popen(
+                [sys.executable, "-m", "playwright", "install", "chromium"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1
+            )
+            
+            # 实时显示安装进度
+            progress_chars = ["|", "/", "-", "\\"]
+            progress_index = 0
+            
+            for line in process.stdout:
+                # 检查是否包含进度信息
+                if "downloading" in line.lower() or "extracting" in line.lower():
+                    progress_index = (progress_index + 1) % len(progress_chars)
+                    console.print(f"  [cyan]{progress_chars[progress_index]} {line.strip()}[/cyan]", end="\r")
+                else:
+                    console.print(f"  [gray]{line.strip()}[/gray]")
+            
+            # 等待进程完成并获取返回码
+            process.wait(timeout=300)
+            
+            if process.returncode == 0:
+                console.print("[green]Playwright浏览器安装成功！[/green]")
+                return True
+            else:
+                console.print(f"[red]Playwright浏览器安装失败，请手动运行 'playwright install' 命令[/red]")
+                return False
+        except subprocess.TimeoutExpired:
+            process.kill()
+            console.print("[red]Playwright浏览器安装超时，请检查网络连接[/red]")
             return False
             
     except Exception as e:
