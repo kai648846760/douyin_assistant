@@ -6,6 +6,7 @@ import os
 import time
 import subprocess
 import sys
+import platform
 from playwright.sync_api import sync_playwright, Browser, Page, Playwright, TimeoutError as PlaywrightTimeoutError
 from rich.console import Console
 
@@ -14,6 +15,31 @@ console = Console()
 def ensure_playwright_browsers():
     """确保Playwright浏览器已安装"""
     try:
+        # 获取可能的浏览器路径
+        browser_paths = []
+        
+        # 检查是否在PyInstaller环境中
+        if hasattr(sys, '_MEIPASS'):
+            # 尝试获取系统默认路径
+            if platform.system() == 'Darwin':  # macOS
+                browser_paths = [
+                    os.path.expanduser("~/Library/Caches/ms-playwright/chromium-*/chrome-mac/Chromium.app/Contents/MacOS/Chromium"),
+                    os.path.expanduser("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
+                    os.path.expanduser("/Applications/Brave Browser.app/Contents/MacOS/Brave Browser")
+                ]
+            elif platform.system() == 'Windows':  # Windows
+                browser_paths = [
+                    os.path.expandvars("%LOCALAPPDATA%\\ms-playwright\\chromium-*\\chrome-win\\chrome.exe"),
+                    os.path.expandvars("%PROGRAMFILES%\\Google\\Chrome\\Application\\chrome.exe"),
+                    os.path.expandvars("%PROGRAMFILES(x86)%\\Google\\Chrome\\Application\\chrome.exe")
+                ]
+            else:  # Linux
+                browser_paths = [
+                    os.path.expanduser("~/.cache/ms-playwright/chromium-*/chrome-linux/chrome"),
+                    "/usr/bin/google-chrome",
+                    "/usr/bin/chromium-browser"
+                ]
+        
         # 尝试启动Playwright来检查浏览器是否可用
         with sync_playwright() as p:
             try:
@@ -22,7 +48,17 @@ def ensure_playwright_browsers():
                 if os.path.exists(browser_path):
                     return True
             except Exception:
-                pass
+                # 如果默认路径不存在，尝试使用系统浏览器
+                for path_pattern in browser_paths:
+                    try:
+                        import glob
+                        matches = glob.glob(path_pattern)
+                        if matches:
+                            # 设置环境变量指向找到的浏览器
+                            os.environ['PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH'] = matches[0]
+                            return True
+                    except Exception:
+                        continue
         
         # 如果浏览器不可用，尝试安装
         console.print("[yellow]检测到Playwright浏览器未安装，正在自动安装...[/yellow]")
@@ -59,9 +95,31 @@ class Uploader:
         self.playwright = sync_playwright().start()
         
         print("正在启动浏览器...")
-        self.browser = self.playwright.chromium.launch_persistent_context(
-            self.user_data_dir, headless=False, args=['--disable-blink-features=AutomationControlled']
-        )
+        # 准备启动配置
+        launch_config = {
+            'user_data_dir': self.user_data_dir,
+            'headless': False,
+            'args': ['--disable-blink-features=AutomationControlled']
+        }
+        
+        # 如果环境变量中指定了浏览器可执行文件路径，使用它
+        if 'PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH' in os.environ:
+            browser_exe_path = os.environ['PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH']
+            if os.path.exists(browser_exe_path):
+                launch_config['executable_path'] = browser_exe_path
+                print(f"使用指定的浏览器路径: {browser_exe_path}")
+        
+        # 启动浏览器
+        try:
+            self.browser = self.playwright.chromium.launch_persistent_context(**launch_config)
+        except Exception as e:
+            # 如果启动失败，尝试使用系统默认浏览器
+            print(f"启动浏览器失败，尝试使用系统默认浏览器: {e}")
+            # 清除可能的错误配置
+            if 'executable_path' in launch_config:
+                del launch_config['executable_path']
+            # 尝试再次启动
+            self.browser = self.playwright.chromium.launch_persistent_context(**launch_config)
         page = self.browser.pages[0] if self.browser.pages else self.browser.new_page()
         
         upload_url = "https://creator.douyin.com/creator-micro/content/upload"
