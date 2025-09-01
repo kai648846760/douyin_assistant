@@ -13,98 +13,328 @@ from rich.console import Console
 console = Console()
 
 def ensure_playwright_browsers():
-    """确保Playwright浏览器已安装"""
+    """确保Playwright浏览器已安装，特别优化了PyInstaller打包环境下的兼容性"""
     try:
-        # 获取可能的浏览器路径
-        browser_paths = []
+        console.print(f"[cyan]开始检查Playwright浏览器状态...[/cyan]")
+        console.print(f"[cyan]当前环境: {'打包环境 (MEIPASS)' if hasattr(sys, '_MEIPASS') else '开发环境'}[/cyan]")
+        console.print(f"[cyan]Python解释器: {sys.executable}[/cyan]")
         
-        # 检查是否在PyInstaller环境中
-        if hasattr(sys, '_MEIPASS'):
-            # 尝试获取系统默认路径
-            if platform.system() == 'Darwin':  # macOS
-                browser_paths = [
-                    os.path.expanduser("~/Library/Caches/ms-playwright/chromium-*/chrome-mac/Chromium.app/Contents/MacOS/Chromium"),
-                    os.path.expanduser("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
-                    os.path.expanduser("/Applications/Brave Browser.app/Contents/MacOS/Brave Browser")
-                ]
-            elif platform.system() == 'Windows':  # Windows
-                browser_paths = [
-                    os.path.expandvars("%LOCALAPPDATA%\\ms-playwright\\chromium-*\\chrome-win\\chrome.exe"),
-                    os.path.expandvars("%PROGRAMFILES%\\Google\\Chrome\\Application\\chrome.exe"),
-                    os.path.expandvars("%PROGRAMFILES(x86)%\\Google\\Chrome\\Application\\chrome.exe")
-                ]
-            else:  # Linux
-                browser_paths = [
-                    os.path.expanduser("~/.cache/ms-playwright/chromium-*/chrome-linux/chrome"),
-                    "/usr/bin/google-chrome",
-                    "/usr/bin/chromium-browser"
-                ]
+        # 确保不会跳过浏览器下载
+        os.environ.pop('PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD', None)
+        console.print(f"[cyan]PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: {'已移除' if 'PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD' not in os.environ else os.environ['PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD']}[/cyan]")
+        
+        # 设置浏览器路径环境变量，如果runtime hook没有设置
+        if 'PLAYWRIGHT_BROWSERS_PATH' not in os.environ:
+            home_dir = os.path.expanduser("~")
+            if platform.system() == 'Windows':
+                default_browser_path = os.path.join(home_dir, ".playwright_browsers")
+            else:
+                default_browser_path = os.path.join(home_dir, ".playwright_browsers")
+            
+            os.makedirs(default_browser_path, exist_ok=True)
+            os.environ['PLAYWRIGHT_BROWSERS_PATH'] = default_browser_path
+            console.print(f"[cyan]设置PLAYWRIGHT_BROWSERS_PATH: {default_browser_path}[/cyan]")
+        else:
+            console.print(f"[cyan]已存在的PLAYWRIGHT_BROWSERS_PATH: {os.environ['PLAYWRIGHT_BROWSERS_PATH']}[/cyan]")
         
         # 尝试启动Playwright来检查浏览器是否可用
-        with sync_playwright() as p:
-            try:
-                # 尝试获取浏览器可执行文件路径
-                browser_path = p.chromium.executable_path
-                if os.path.exists(browser_path):
-                    return True
-            except Exception:
-                # 如果默认路径不存在，尝试使用系统浏览器
-                for path_pattern in browser_paths:
-                    try:
-                        import glob
-                        matches = glob.glob(path_pattern)
-                        if matches:
-                            # 设置环境变量指向找到的浏览器
-                            os.environ['PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH'] = matches[0]
-                            return True
-                    except Exception:
-                        continue
+        try:
+            with sync_playwright() as p:
+                try:
+                    # 尝试获取浏览器可执行文件路径
+                    browser_path = p.chromium.executable_path
+                    console.print(f"[cyan]检测到Playwright浏览器路径: {browser_path}[/cyan]")
+                    if os.path.exists(browser_path):
+                        console.print("[green]Playwright浏览器已安装并可用！[/green]")
+                        return True
+                    else:
+                        console.print(f"[yellow]浏览器路径存在但文件不存在: {browser_path}[/yellow]")
+                except Exception as e:
+                    console.print(f"[yellow]无法获取默认浏览器路径: {e}[/yellow]")
+        except Exception as e:
+            console.print(f"[yellow]Playwright初始化异常: {e}[/yellow]")
         
         # 如果浏览器不可用，尝试安装
-        console.print("[yellow]检测到Playwright浏览器未安装，正在自动安装...[/yellow]")
+        console.print("[yellow]检测到Playwright浏览器未安装或不可用，正在自动安装...[/yellow]")
         
+        # 尝试多种安装方法
+        install_methods = [
+            {"name": "标准Playwright安装", "method": _install_playwright_standard},
+            {"name": "备用Playwright安装", "method": _install_playwright_alternative},
+            {"name": "系统Python安装", "method": _install_playwright_system_python}
+        ]
+        
+        for method_info in install_methods:
+            try:
+                console.print(f"[cyan]尝试{method_info['name']}...[/cyan]")
+                success = method_info['method']()
+                if success:
+                    console.print(f"[green]{method_info['name']}成功！[/green]")
+                    # 安装成功后，验证浏览器是否可用
+                    try:
+                        with sync_playwright() as p:
+                            browser_path = p.chromium.executable_path
+                            if os.path.exists(browser_path):
+                                return True
+                            else:
+                                console.print(f"[red]安装成功但浏览器文件不存在: {browser_path}[/red]")
+                                continue
+                    except Exception as e:
+                        console.print(f"[red]安装成功但验证失败: {e}[/red]")
+                        continue
+            except Exception as e:
+                console.print(f"[red]{method_info['name']}失败: {e}[/red]")
+                continue
+        
+        # 如果所有安装方法都失败
+        console.print("[red]所有安装方法都失败了！[/red]")
+        console.print("[yellow]提示: 请尝试手动运行 'python -m playwright install chromium' 命令[/yellow]")
+        
+        # 作为最后的备选，直接使用系统Chrome浏览器（如果有）
+        if _has_system_chrome():
+            console.print("[green]检测到系统已安装Chrome浏览器，可以直接使用！[/green]")
+            return True
+        
+        return False
+        
+    except Exception as e:
+        console.print(f"[red]检查或安装Playwright浏览器时出错: {e}[/red]")
+        # 记录详细错误信息到临时文件以便调试
         try:
-            # 使用更友好的方式执行安装命令，显示实时进度
-            console.print("[blue]正在下载Chromium浏览器（约150MB），请耐心等待...[/blue]")
-            
-            # 创建子进程并实时显示输出
+            temp_log = os.path.join(os.environ.get('TEMP', os.environ.get('TMPDIR', '/tmp')), 'playwright_install_error.log')
+            with open(temp_log, 'a') as f:
+                f.write(f"Time: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write(f"Error: {str(e)}\n")
+                f.write(f"Is MEIPASS: {hasattr(sys, '_MEIPASS')}\n")
+                f.write(f"Python Executable: {sys.executable}\n")
+                f.write(f"Platform: {platform.system()}\n")
+                f.write(f"PLAYWRIGHT_BROWSERS_PATH: {os.environ.get('PLAYWRIGHT_BROWSERS_PATH', '未设置')}\n")
+                f.write("----------------------------------------\n")
+        except:
+            pass
+        return False
+
+
+def _install_playwright_standard():
+    """标准的Playwright安装方法"""
+    # 构建安装命令参数
+    install_args = ["-m", "playwright", "install", "chromium"]
+    
+    # 根据不同环境选择Python解释器
+    if hasattr(sys, '_MEIPASS'):
+        console.print("[cyan]在打包环境中，寻找合适的Python解释器...[/cyan]")
+        
+        # 首先尝试使用系统Python
+        if platform.system() == 'Darwin':  # macOS
+            python_exe = '/usr/bin/python3'
+            # 备用路径
+            if not os.path.exists(python_exe):
+                python_exe = '/usr/local/bin/python3'
+        elif platform.system() == 'Windows':  # Windows
+            python_exe = 'python'
+            # 在Windows上使用cmd执行，确保能找到Python
             process = subprocess.Popen(
-                [sys.executable, "-m", "playwright", "install", "chromium"],
+                ['cmd.exe', '/c', 'python'] + install_args,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
                 bufsize=1
             )
+            use_cmd = True
+        else:  # Linux
+            python_exe = '/usr/bin/python3'
+            use_cmd = False
+        
+        if platform.system() != 'Windows' or not use_cmd:
+            # 检查Python解释器是否存在
+            if not os.path.exists(python_exe) and platform.system() == 'Windows':
+                # 在Windows上，如果python命令不可用，尝试使用py命令
+                python_exe = 'py'
             
-            # 实时显示安装进度
-            progress_chars = ["|", "/", "-", "\\"]
-            progress_index = 0
+            process = subprocess.Popen(
+                [python_exe] + install_args,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1
+            )
+    else:
+        # 非打包环境，使用当前Python解释器
+        process = subprocess.Popen(
+            [sys.executable] + install_args,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1
+        )
+    
+    # 实时显示安装进度
+    progress_chars = ["|", "/", "-", "\\"]
+    progress_index = 0
+    
+    for line in process.stdout:
+        # 检查是否包含进度信息
+        if "downloading" in line.lower() or "extracting" in line.lower():
+            progress_index = (progress_index + 1) % len(progress_chars)
+            console.print(f"  [cyan]{progress_chars[progress_index]} {line.strip()}[/cyan]", end="\r")
+        else:
+            console.print(f"  [gray]{line.strip()}[/gray]")
+    
+    # 等待进程完成并获取返回码
+    process.wait(timeout=300)
+    
+    return process.returncode == 0
+
+
+def _install_playwright_alternative():
+    """备用的Playwright安装方法，使用pip install playwright"""
+    # 在Windows上使用cmd执行
+    if platform.system() == 'Windows':
+        process = subprocess.Popen(
+            ['cmd.exe', '/c', 'pip', 'install', 'playwright'],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1
+        )
+    else:
+        # 其他系统直接使用pip
+        process = subprocess.Popen(
+            ['pip', 'install', 'playwright'],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1
+        )
+    
+    # 显示安装进度
+    for line in process.stdout:
+        console.print(f"  [gray]{line.strip()}[/gray]")
+    
+    process.wait(timeout=300)
+    
+    if process.returncode != 0:
+        return False
+    
+    # 安装完成后，执行playwright install
+    if platform.system() == 'Windows':
+        process = subprocess.Popen(
+            ['cmd.exe', '/c', 'playwright', 'install', 'chromium'],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1
+        )
+    else:
+        process = subprocess.Popen(
+            ['playwright', 'install', 'chromium'],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1
+        )
+    
+    # 显示安装进度
+    for line in process.stdout:
+        console.print(f"  [gray]{line.strip()}[/gray]")
+    
+    process.wait(timeout=300)
+    
+    return process.returncode == 0
+
+
+def _install_playwright_system_python():
+    """使用系统Python安装Playwright"""
+    # 获取系统Python路径
+    system_python_paths = []
+    
+    if platform.system() == 'Windows':
+        system_python_paths = [
+            'python',
+            'py',
+            os.path.expandvars('%LOCALAPPDATA%\Programs\Python\Python39\python.exe'),
+            os.path.expandvars('%LOCALAPPDATA%\Programs\Python\Python310\python.exe'),
+            os.path.expandvars('%LOCALAPPDATA%\Programs\Python\Python311\python.exe'),
+            os.path.expandvars('%LOCALAPPDATA%\Programs\Python\Python312\python.exe'),
+        ]
+    elif platform.system() == 'Darwin':
+        system_python_paths = [
+            '/usr/bin/python3',
+            '/usr/local/bin/python3',
+            '/opt/homebrew/bin/python3',
+        ]
+    else:
+        system_python_paths = [
+            '/usr/bin/python3',
+            '/usr/bin/python',
+        ]
+    
+    # 尝试使用每个系统Python路径
+    for python_exe in system_python_paths:
+        try:
+            console.print(f"[cyan]尝试使用系统Python: {python_exe}[/cyan]")
             
+            if platform.system() == 'Windows':
+                process = subprocess.Popen(
+                    ['cmd.exe', '/c', python_exe, '-m', 'playwright', 'install', 'chromium'],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    bufsize=1
+                )
+            else:
+                process = subprocess.Popen(
+                    [python_exe, '-m', 'playwright', 'install', 'chromium'],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    bufsize=1
+                )
+            
+            # 显示安装进度
             for line in process.stdout:
-                # 检查是否包含进度信息
-                if "downloading" in line.lower() or "extracting" in line.lower():
-                    progress_index = (progress_index + 1) % len(progress_chars)
-                    console.print(f"  [cyan]{progress_chars[progress_index]} {line.strip()}[/cyan]", end="\r")
-                else:
-                    console.print(f"  [gray]{line.strip()}[/gray]")
+                console.print(f"  [gray]{line.strip()}[/gray]")
             
-            # 等待进程完成并获取返回码
             process.wait(timeout=300)
             
             if process.returncode == 0:
-                console.print("[green]Playwright浏览器安装成功！[/green]")
                 return True
-            else:
-                console.print(f"[red]Playwright浏览器安装失败，请手动运行 'playwright install' 命令[/red]")
-                return False
-        except subprocess.TimeoutExpired:
-            process.kill()
-            console.print("[red]Playwright浏览器安装超时，请检查网络连接[/red]")
-            return False
-            
-    except Exception as e:
-        console.print(f"[red]检查或安装Playwright浏览器时出错: {e}[/red]")
-        return False
+        except Exception as e:
+            console.print(f"[red]使用{python_exe}失败: {e}[/red]")
+            continue
+    
+    return False
+
+
+def _has_system_chrome():
+    """检查系统是否已安装Chrome浏览器"""
+    # 检查系统Chrome路径
+    system_chrome_paths = []
+    
+    if platform.system() == 'Darwin':  # macOS
+        system_chrome_paths = [
+            '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+            '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser'
+        ]
+    elif platform.system() == 'Windows':  # Windows
+        system_chrome_paths = [
+            os.path.expandvars('%PROGRAMFILES%\Google\Chrome\Application\chrome.exe'),
+            os.path.expandvars('%PROGRAMFILES(x86)%\Google\Chrome\Application\chrome.exe')
+        ]
+    else:  # Linux
+        system_chrome_paths = [
+            '/usr/bin/google-chrome',
+            '/usr/bin/chromium-browser'
+        ]
+    
+    # 检查是否有Chrome浏览器可用
+    for chrome_path in system_chrome_paths:
+        if os.path.exists(chrome_path):
+            os.environ['PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH'] = chrome_path
+            console.print(f"[green]设置系统Chrome浏览器路径: {chrome_path}[/green]")
+            return True
+    
+    return False
 
 class Uploader:
     """负责通过模拟浏览器操作上传视频到抖音 (已重构为会话模式，支持批量上传)"""
@@ -120,53 +350,175 @@ class Uploader:
         """启动Playwright，打开浏览器，并处理一次性登录。返回一个可用的页面对象。"""
         # 确保Playwright浏览器已安装
         if not ensure_playwright_browsers():
-            raise RuntimeError("无法安装或使用Playwright浏览器")
+            # 如果安装失败，尝试使用系统安装的Playwright
+            console.print("[yellow]尝试使用系统中已安装的Playwright...[/yellow]")
+            # 尝试直接启动，不依赖ensure_playwright_browsers的返回值
+            try:
+                # 跳过安装检查，直接尝试启动
+                pass
+            except Exception:
+                raise RuntimeError("无法安装或使用Playwright浏览器")
             
-        self.playwright = sync_playwright().start()
+        # 在启动前再次检查环境变量
+        if hasattr(sys, '_MEIPASS'):
+            console.print(f"[cyan]当前打包环境: {sys._MEIPASS}[/cyan]")
+            console.print(f"[cyan]PLAYWRIGHT_BROWSERS_PATH: {os.environ.get('PLAYWRIGHT_BROWSERS_PATH', '未设置')}[/cyan]")
         
-        print("正在启动浏览器...")
-        # 准备启动配置
-        launch_config = {
-            'user_data_dir': self.user_data_dir,
-            'headless': False,
-            'args': ['--disable-blink-features=AutomationControlled']
-        }
+        # 尝试启动Playwright
+        try:
+            self.playwright = sync_playwright().start()
+        except Exception as e:
+            console.print(f"[red]无法启动Playwright: {e}[/red]")
+            # 尝试获取系统中已安装的Playwright路径
+            try:
+                # 尝试使用系统Python的Playwright
+                console.print("[yellow]尝试使用系统中已安装的Playwright...[/yellow]")
+                # 这是一个备选方案，直接尝试重新导入
+                from playwright.sync_api import sync_playwright
+                self.playwright = sync_playwright().start()
+            except Exception as e2:
+                raise RuntimeError(f"无法初始化Playwright: {e2}")
         
-        # 如果环境变量中指定了浏览器可执行文件路径，使用它
+        console.print("[green]正在启动浏览器...[/green]")
+        
+        # 准备多种启动配置，逐步降级尝试
+        launch_configs = [
+            # 配置1: 标准配置
+            {
+                'user_data_dir': self.user_data_dir,
+                'headless': False,
+                'args': [
+                    '--disable-blink-features=AutomationControlled',
+                    '--no-sandbox',  # 解决权限问题
+                    '--disable-dev-shm-usage',  # 解决内存问题
+                    '--disable-gpu',  # 避免GPU相关问题
+                    '--disable-extensions',  # 禁用扩展
+                    '--start-maximized'  # 最大化窗口
+                ]
+            },
+            # 配置2: 使用系统Chrome（如果有）
+            {
+                'user_data_dir': self.user_data_dir,
+                'headless': False,
+                'args': [
+                    '--disable-blink-features=AutomationControlled',
+                    '--no-sandbox',
+                    '--disable-dev-shm-usage'
+                ]
+            },
+            # 配置3: Headless模式作为最后的备选
+            {
+                'user_data_dir': self.user_data_dir,
+                'headless': True,
+                'args': [
+                    '--disable-blink-features=AutomationControlled',
+                    '--no-sandbox',
+                    '--disable-dev-shm-usage'
+                ]
+            }
+        ]
+        
+        # 检查是否有系统Chrome可用
+        system_chrome_paths = []
+        if platform.system() == 'Darwin':  # macOS
+            system_chrome_paths = [
+                '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+                '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser'
+            ]
+        elif platform.system() == 'Windows':  # Windows
+            system_chrome_paths = [
+                os.path.expandvars('%PROGRAMFILES%\Google\Chrome\Application\chrome.exe'),
+                os.path.expandvars('%PROGRAMFILES(x86)%\Google\Chrome\Application\chrome.exe')
+            ]
+        else:  # Linux
+            system_chrome_paths = [
+                '/usr/bin/google-chrome',
+                '/usr/bin/chromium-browser'
+            ]
+        
+        # 设置系统Chrome路径（如果有）
+        for chrome_path in system_chrome_paths:
+            if os.path.exists(chrome_path):
+                launch_configs[1]['executable_path'] = chrome_path
+                console.print(f"[cyan]找到系统Chrome浏览器: {chrome_path}[/cyan]")
+                break
+        
+        # 优先使用环境变量中指定的浏览器路径
         if 'PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH' in os.environ:
             browser_exe_path = os.environ['PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH']
             if os.path.exists(browser_exe_path):
-                launch_config['executable_path'] = browser_exe_path
-                print(f"使用指定的浏览器路径: {browser_exe_path}")
+                launch_configs[0]['executable_path'] = browser_exe_path
+                console.print(f"[blue]使用环境变量指定的浏览器路径: {browser_exe_path}[/blue]")
         
-        # 启动浏览器
-        try:
-            self.browser = self.playwright.chromium.launch_persistent_context(**launch_config)
-        except Exception as e:
-            # 如果启动失败，尝试使用系统默认浏览器
-            print(f"启动浏览器失败，尝试使用系统默认浏览器: {e}")
-            # 清除可能的错误配置
-            if 'executable_path' in launch_config:
-                del launch_config['executable_path']
-            # 尝试再次启动
-            self.browser = self.playwright.chromium.launch_persistent_context(**launch_config)
+        # 尝试启动浏览器，使用多种配置逐步降级
+        self.browser = None
+        for config_idx, config in enumerate(launch_configs):
+            try:
+                config_name = ['标准配置', '系统Chrome', 'Headless模式'][config_idx]
+                console.print(f"[yellow]尝试使用{config_name}启动浏览器...[/yellow]")
+                self.browser = self.playwright.chromium.launch_persistent_context(**config)
+                console.print("[green]浏览器启动成功！[/green]")
+                break  # 成功启动，跳出循环
+            except Exception as e:
+                console.print(f"[red]使用{config_name}启动浏览器失败: {e}[/red]")
+                # 尝试清理环境变量后重试
+                if config_idx == 0 and 'PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH' in os.environ:
+                    console.print("[yellow]尝试移除浏览器路径环境变量后重试...[/yellow]")
+                    del os.environ['PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH']
+        
+        # 如果所有配置都失败，抛出异常
+        if not self.browser:
+            error_msg = "无法使用任何配置启动浏览器"
+            console.print(f"[red]{error_msg}[/red]")
+            # 尝试手动创建用户数据目录
+            os.makedirs(self.user_data_dir, exist_ok=True)
+            console.print(f"[yellow]已确保用户数据目录存在: {self.user_data_dir}[/yellow]")
+            raise RuntimeError(error_msg)
+        
+        # 获取页面对象
         page = self.browser.pages[0] if self.browser.pages else self.browser.new_page()
         
+        # 导航到上传页面
         upload_url = "https://creator.douyin.com/creator-micro/content/upload"
         home_url_fragment = "/creator-micro/home"
         
-        page.goto(upload_url, wait_until="domcontentloaded", timeout=60000)
+        try:
+            console.print(f"[cyan]导航到上传页面: {upload_url}[/cyan]")
+            page.goto(upload_url, wait_until="domcontentloaded", timeout=60000)
+        except Exception as e:
+            console.print(f"[red]导航到上传页面失败: {e}[/red]")
+            # 尝试备用URL
+            console.print("[yellow]尝试使用备用URL...[/yellow]")
+            page.goto("https://creator.douyin.com", wait_until="domcontentloaded", timeout=60000)
         
-        print("正在检查登录状态或等待您登录...")
-        while True:
-            if page.get_by_role('button', name='上传视频').count() > 0:
-                print("‘上传视频’按钮已找到，您已登录！")
-                break
-            if home_url_fragment in page.url:
-                print(f"检测到已跳转到创作者主页，登录成功！")
-                break
-            print("  [-] 未检测到登录成功信号，等待您扫码登录，5秒后重试...")
+        # 检查登录状态
+        console.print("[blue]正在检查登录状态或等待您登录...[/blue]")
+        max_wait_time = 300  # 最多等待5分钟
+        start_time = time.time()
+        
+        while time.time() - start_time < max_wait_time:
+            try:
+                if page.get_by_role('button', name='上传视频').count() > 0:
+                    console.print("[green]‘上传视频’按钮已找到，您已登录！[/green]")
+                    break
+                if home_url_fragment in page.url:
+                    console.print(f"[green]检测到已跳转到创作者主页，登录成功！[/green]")
+                    break
+                # 额外检查：如果出现登录页面的特定元素，也认为需要登录
+                if "login" in page.url.lower() or page.locator('input[name="phone"]').count() > 0:
+                    console.print("[yellow]检测到需要登录，请扫码或输入账号密码登录...[/yellow]")
+            except Exception as e:
+                console.print(f"[red]检查登录状态时出错: {e}[/red]")
+            
+            # 显示剩余等待时间
+            elapsed = int(time.time() - start_time)
+            remaining = max_wait_time - elapsed
+            console.print(f"  [-] 未检测到登录成功信号，等待您登录，{remaining}秒后超时...", end="\r")
             time.sleep(5)
+        
+        if time.time() - start_time >= max_wait_time:
+            console.print("[red]登录等待超时，请检查网络连接或手动登录...[/red]")
+            # 不抛出异常，让用户有机会手动操作
         
         return page
 

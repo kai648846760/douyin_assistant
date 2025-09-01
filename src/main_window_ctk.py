@@ -290,7 +290,7 @@ class MainWindowCTK(ctk.CTk):
         version_frame = ctk.CTkFrame(info_section, fg_color="transparent")
         version_frame.pack(fill="x", padx=self.adaptive_padding, pady=12)
         
-        version_label = ctk.CTkLabel(version_frame, text="📱 抖音全能助手 v2.0.0",
+        version_label = ctk.CTkLabel(version_frame, text="📱 抖音全能助手 v2.0.4",
                                     font=ctk.CTkFont(size=self.adaptive_normal_font, weight="bold"))
         version_label.pack(anchor="w")
         
