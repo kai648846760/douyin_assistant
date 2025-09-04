@@ -123,9 +123,14 @@ class Downloader:
                     return
                 self._download_single_video(aweme, sub_folder=folder_name)
 
-            if not data.get('has_more'): print(f"\n所有{entity_name}已处理完毕。"); break
+            # 检查是否有更多数据
+            if not data.get('has_more'): 
+                print(f"\n所有{entity_name}已处理完毕。")
+                break
 
-            cursor = data.get('cursor'); page += 1
+            # 更新游标
+            cursor = data.get('cursor', 0)
+            page += 1
 
     def download_from_post(self, user_url: str):
         print(f"\n开始下载主页作品: {user_url}")

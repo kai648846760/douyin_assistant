@@ -19,6 +19,7 @@ try:
     from src.account_manager import AccountManager
     from src.uploader import Uploader
     from src.downloader import Downloader
+    from src.video_processor import VideoProcessor
 except ImportError as e:
     print(f"导入错误: {e}")
     # 如果导入失败，创建占位符类
@@ -32,6 +33,16 @@ except ImportError as e:
     
     class Downloader:
         def __init__(self, *args, **kwargs):
+            pass
+    
+    class VideoProcessor:
+        def __init__(self):
+            pass
+        
+        def process_video(self, video_path, ratio):
+            return video_path
+        
+        def cleanup_temp_file(self, file_path):
             pass
 
 class WorkerCTK:
@@ -54,6 +65,11 @@ class WorkerCTK:
         # 日志缓冲
         self._log_buffer = []
         self._log_lock = threading.Lock()
+        
+        # 视频处理相关配置
+        self.process_videos = False  # 是否处理视频
+        self.frame_delete_ratio = 0.1  # 要删除的帧比例
+        self.video_processor = VideoProcessor()
     
     def log(self, message: str):
         """记录日志消息"""
@@ -269,6 +285,7 @@ class WorkerCTK:
     
     def run_single_upload(self, account_name: str, video_path: str, tags: List[str] = None):
         """运行单个视频上传任务"""
+        processed_video_path = None
         try:
             self.is_stopping = False
             self.log(f"开始上传视频 '{os.path.basename(video_path)}' 到账号 '{account_name}'...")
@@ -282,6 +299,19 @@ class WorkerCTK:
             if not user_data_dir or not os.path.isdir(user_data_dir):
                 raise Exception(f"账号 '{account_name}' 没有配置有效的用户数据目录")
             
+            # 处理视频（如果启用）
+            if self.process_videos:
+                try:
+                    self.log(f"开始处理视频，删除比例: {self.frame_delete_ratio:.1%}")
+                    processed_video_path = self.video_processor.process_video(video_path, self.frame_delete_ratio)
+                    self.log(f"视频处理完成")
+                except Exception as e:
+                    self.log(f"视频处理失败，使用原始视频继续: {str(e)}")
+                    processed_video_path = None
+            
+            # 使用处理后的视频或原始视频
+            upload_video_path = processed_video_path if processed_video_path else video_path
+            
             # 动态创建uploader实例
             uploader = Uploader(user_data_dir)
             
@@ -290,7 +320,7 @@ class WorkerCTK:
             title = os.path.splitext(video_name)[0]
             
             # 使用uploader模块执行上传
-            result = uploader.upload_video(video_path, title, tags or [])
+            result = uploader.upload_video(upload_video_path, title, tags or [])
             
             if result:
                 self.log(f"视频 '{os.path.basename(video_path)}' 上传成功")
@@ -304,8 +334,16 @@ class WorkerCTK:
             self.log(error_msg)
             if callable(self.finished_callback):
                 self.finished_callback("error", error_msg)
+        finally:
+            # 清理临时文件
+            if processed_video_path:
+                try:
+                    self.video_processor.cleanup_temp_file(processed_video_path)
+                except Exception as e:
+                    self.log(f"清理临时文件失败: {str(e)}")
+                    # 继续执行，不中断流程
     
-    def run_batch_upload(self, account_names: List[str], video_paths: List[str], common_tags: List[str] = None):
+    def run_batch_upload(self, account_names: List[str], video_paths: List[str], common_tags: List[str] = None, process_videos=False, frame_delete_ratio=0.1):
         """运行批量上传任务"""
         try:
             self.is_stopping = False
@@ -314,6 +352,12 @@ class WorkerCTK:
             total_tasks = total_videos * total_accounts
             
             self.log(f"开始批量上传任务: {total_videos} 个视频 × {total_accounts} 个账号 = {total_tasks} 个任务")
+            
+            # 记录视频处理设置
+            if process_videos:
+                self.log(f"已启用视频帧处理，删除比例: {int(frame_delete_ratio * 100)}%")
+            else:
+                self.log("未启用视频帧处理")
             
             # 验证所有账号
             valid_accounts = []
@@ -351,38 +395,46 @@ class WorkerCTK:
                 video_tags = self._parse_video_tags(video_name)
                 all_tags = (common_tags or []) + video_tags
                 
+                video_uploaded = False
                 for j, account_name in enumerate(valid_accounts, 1):
-                    if self.is_stopping:
+                    if self.is_stopping or video_uploaded:
                         break
                     
                     self.log(f"  上传到账号 {j}/{len(valid_accounts)}: {account_name}")
                     
                     try:
-                        # 动态创建uploader实例
-                        account_info = self.account_manager.get_account(account_name)
-                        user_data_dir = account_info.get('user_data_dir')
-                        uploader = Uploader(user_data_dir)
+                        # 保存当前的视频处理设置
+                        current_process_videos = self.process_videos
+                        current_frame_delete_ratio = self.frame_delete_ratio
                         
-                        # 解析视频标题
-                        video_name = os.path.basename(video_path)
-                        title = os.path.splitext(video_name)[0]
+                        # 设置本次上传的视频处理参数
+                        self.process_videos = process_videos
+                        self.frame_delete_ratio = frame_delete_ratio
                         
-                        # 使用uploader模块执行上传
-                        result = uploader.upload_video(video_path, title, all_tags)
+                        # 调用run_single_upload方法来利用现有的视频处理功能
+                        result = self.run_single_upload(account_name, video_path, all_tags)
+                        
+                        # 恢复原来的设置
+                        self.process_videos = current_process_videos
+                        self.frame_delete_ratio = current_frame_delete_ratio
                         
                         if result:
                             success_count += 1
                             self.log(f"  ✓ 成功上传到 {account_name}")
+                            video_uploaded = True  # 视频已上传成功，不需要尝试其他账号
                         else:
                             failed_count += 1
                             self.log(f"  ✗ 上传到 {account_name} 失败")
-                    
+                        
                     except Exception as e:
                         failed_count += 1
                         self.log(f"  ✗ 上传到 {account_name} 时发生错误: {str(e)}")
+                        # 恢复原来的设置
+                        self.process_videos = current_process_videos
+                        self.frame_delete_ratio = current_frame_delete_ratio
                     
                     # 添加延迟避免过于频繁的操作
-                    if not self.is_stopping and j < len(valid_accounts):
+                    if not self.is_stopping and j < len(valid_accounts) and not video_uploaded:
                         time.sleep(2)
                 
                 # 视频间的延迟

@@ -24,9 +24,12 @@ def main():
     try:
         # 导入CustomTkinter主窗口
         from src.main_window_ctk import MainWindowCTK
+        import traceback
         
+        print("开始初始化主窗口...")
         # 创建并运行应用
         app = MainWindowCTK()
+        print("主窗口初始化完成，开始主循环...")
         app.mainloop()
         
     except ImportError as e:
@@ -37,6 +40,8 @@ def main():
         sys.exit(1)
     except Exception as e:
         print(f"启动应用时发生错误: {e}")
+        print("\n错误详情:")
+        traceback.print_exc()
         sys.exit(1)
 
 if __name__ == "__main__":

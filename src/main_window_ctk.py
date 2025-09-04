@@ -119,10 +119,12 @@ class MainWindowCTK(ctk.CTk):
         # 初始化组件
         self.account_manager = AccountManager()
         self.worker = WorkerCTK()
-        self.setup_logging()
 
-        # 创建UI
+        # 先创建UI组件
         self.create_widgets()
+        
+        # 然后再设置日志重定向，确保log_text已创建
+        self.setup_logging()
 
         # 初始化数据
         self.refresh_accounts()
@@ -134,10 +136,10 @@ class MainWindowCTK(ctk.CTk):
         self.bind("<Configure>", self.on_window_configure)
 
     def setup_logging(self):
-        """设置日志重定向 - 暂时禁用以避免递归错误"""
-        # 暂时禁用日志重定向，避免递归错误
-        # sys.stdout = LogRedirector(self.append_log)
-        # sys.stderr = LogRedirector(self.append_log)
+        """设置日志重定向 - 将系统输出重定向到GUI日志面板"""
+        # 启用日志重定向
+        sys.stdout = LogRedirector(self.append_log)
+        sys.stderr = LogRedirector(self.append_log)
 
         # 连接worker的信号
         self.worker.progress_callback = self.append_log
@@ -146,11 +148,11 @@ class MainWindowCTK(ctk.CTk):
     def create_widgets(self):
         """创建现代化左右分栏布局 - 响应式设计"""
         # 主容器 - 使用适配参数
-        main_frame = ctk.CTkFrame(self, fg_color="transparent")
-        main_frame.pack(fill="both", expand=True, padx=self.adaptive_padding, pady=self.adaptive_padding)
+        self.main_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.main_frame.pack(fill="both", expand=True, padx=self.adaptive_padding, pady=self.adaptive_padding)
 
         # 创建左右分栏容器
-        content_container = ctk.CTkFrame(main_frame, fg_color="transparent")
+        content_container = ctk.CTkFrame(self.main_frame, fg_color="transparent")
         content_container.pack(fill="both", expand=True)
 
         # 左侧功能区域 - 占用可变宽度
@@ -290,7 +292,7 @@ class MainWindowCTK(ctk.CTk):
         version_frame = ctk.CTkFrame(info_section, fg_color="transparent")
         version_frame.pack(fill="x", padx=self.adaptive_padding, pady=12)
         
-        version_label = ctk.CTkLabel(version_frame, text="📱 抖音全能助手 v2.0.4",
+        version_label = ctk.CTkLabel(version_frame, text="📱 抖音全能助手 v2.0.5",
                                     font=ctk.CTkFont(size=self.adaptive_normal_font, weight="bold"))
         version_label.pack(anchor="w")
         
@@ -590,8 +592,47 @@ class MainWindowCTK(ctk.CTk):
                                        hover_color=("#10b981", "#059669"))
         self.upload_btn.pack(side="left")
         
+        # 视频处理选项区域
+        process_options_frame = ctk.CTkFrame(video_card, fg_color="transparent")
+        process_options_frame.pack(fill="x", padx=self.adaptive_padding, pady=(10, 5))
+        
+        # 启用视频处理的复选框
+        self.process_videos_var = ctk.StringVar(value="0")  # 0表示禁用，1表示启用
+        process_checkbox = ctk.CTkCheckBox(
+            process_options_frame, 
+            text="🎞️ 启用视频帧处理", 
+            variable=self.process_videos_var, 
+            onvalue="1", 
+            offvalue="0",
+            font=ctk.CTkFont(size=self.adaptive_normal_font)
+        )
+        process_checkbox.pack(side="left", padx=(0, 20), fill="y")
+        
+        # 视频帧删除比例滑块
+        self.frame_delete_ratio = ctk.DoubleVar(value=0.01)  # 默认删除1%的帧
+        ratio_frame = ctk.CTkFrame(process_options_frame, fg_color="transparent")
+        ratio_frame.pack(side="left", fill="both", expand=True)
+        
+        ctk.CTkLabel(ratio_frame, text="📊 帧删除比例: 10%", 
+                    font=ctk.CTkFont(size=self.adaptive_normal_font), 
+                    text_color=("#555555", "#777777")).pack(anchor="w", pady=(0, 2))
+        
+        def update_ratio_label(value):
+            percentage = int(float(value) * 100)
+            ratio_frame.winfo_children()[0].configure(text=f"📊 帧删除比例: {percentage}%")
+        
+        ratio_slider = ctk.CTkSlider(
+            ratio_frame,
+            from_=0.01,  # 最小值：1%
+            to=0.1,      # 最大值：10%
+            number_of_steps=9,  # 9个步长，对应1%-10%的9个级别
+            variable=self.frame_delete_ratio,
+            command=update_ratio_label
+        )
+        ratio_slider.pack(fill="x")
+        
         # 视频列表 - 固定剩余高度
-        video_list_height = max(60, video_section_height - 90)  # 预留90px给标题和按钮
+        video_list_height = max(60, video_section_height - 180)  # 增加预留空间给视频处理选项
         self.video_list_frame = ctk.CTkScrollableFrame(video_card, height=video_list_height)
         self.video_list_frame.pack(fill="x", padx=self.adaptive_padding, pady=(0, 10))
         
@@ -635,8 +676,8 @@ class MainWindowCTK(ctk.CTk):
                     self._limit_log_lines()
                     
             except Exception as e:
-                # 如果日志显示出错，不要影响主程序
-                print(f"日志显示错误: {e}")
+                # 如果日志显示出错，使用原始标准输出而不是重定向的输出
+                sys.__stdout__.write(f"日志显示错误: {e}\n")
 
         # 确保在主线程中更新UI
         if threading.current_thread() == threading.main_thread():
@@ -665,7 +706,7 @@ class MainWindowCTK(ctk.CTk):
                 self.log_text.see("end")
                 
         except Exception as e:
-            print(f"日志清理错误: {e}")
+            sys.__stdout__.write(f"日志清理错误: {e}\n")
 
     def on_task_finished(self, msg_type, message):
         """任务完成回调"""
@@ -1021,10 +1062,16 @@ class MainWindowCTK(ctk.CTk):
         self.upload_btn.configure(state="disabled")
         self.log_text.delete("1.0", "end")
 
+        # 获取视频处理相关参数
+        process_videos = self.process_videos_var.get() == "1"
+        frame_delete_ratio = self.frame_delete_ratio.get()
+        
         # 在后台线程中执行任务
         def task():
             self.worker.run_batch_upload(
-                selected_accounts, selected_videos, tags)
+                selected_accounts, selected_videos, tags,
+                process_videos=process_videos,
+                frame_delete_ratio=frame_delete_ratio)
 
         threading.Thread(target=task, daemon=True).start()
 
