@@ -119,26 +119,26 @@ class WorkerCTK:
         if callable(self.finished_callback):
             self.finished_callback("info", "下载任务已停止")
     
-    def run_update_cookie(self, account_name: str, browser: str):
-        """运行更新Cookie任务"""
+    def run_update_cookie(self, account_name: str):
+        """运行更新Cookie任务 - 仅使用Playwright方式"""
         try:
             self.is_stopping = False
-            self.log(f"开始为账号 '{account_name}' 从 {browser} 浏览器更新Cookie...")
             
             # 获取账号信息
             account_info = self.account_manager.get_account(account_name)
             if not account_info:
                 raise Exception(f"账号 '{account_name}' 不存在")
             
-            # 调用账号管理器的更新Cookie方法
-            success = self.account_manager.update_cookie_from_browser(account_name, browser)
+            # 始终使用Playwright方式更新Cookie
+            self.log(f"开始使用Playwright为账号 '{account_name}' 登录抖音并更新Cookie...")
+            success = self.account_manager.update_cookie_with_playwright(account_name)
             
             if success:
                 self.log(f"账号 '{account_name}' 的Cookie更新成功")
                 if callable(self.finished_callback):
                     self.finished_callback("success", f"账号 '{account_name}' 的Cookie更新成功")
             else:
-                raise Exception(f"无法从 {browser} 浏览器获取Cookie")
+                raise Exception(f"无法更新账号 '{account_name}' 的Cookie")
                 
         except Exception as e:
             error_msg = f"更新Cookie失败: {str(e)}"

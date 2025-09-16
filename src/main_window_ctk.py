@@ -390,17 +390,6 @@ class MainWindowCTK(ctk.CTk):
                                                    height=self.adaptive_entry_height, font=ctk.CTkFont(size=self.adaptive_small_font))
         self.cookie_account_combo.pack(fill="x")
         
-        # 浏览器选择
-        browser_frame = ctk.CTkFrame(right_column, fg_color="transparent")
-        browser_frame.pack(fill="x", padx=self.adaptive_padding, pady=(0, self.adaptive_padding))
-        
-        ctk.CTkLabel(browser_frame, text="选择浏览器:", font=ctk.CTkFont(size=self.adaptive_normal_font)).pack(anchor="w", pady=(0, 4))
-        self.cookie_browser_combo = ctk.CTkComboBox(browser_frame, 
-                                                   values=['chrome', 'firefox', 'edge', 'opera'],
-                                                   height=self.adaptive_entry_height, font=ctk.CTkFont(size=self.adaptive_small_font))
-        self.cookie_browser_combo.pack(fill="x")
-        self.cookie_browser_combo.set('chrome')  # 设置默认值
-        
         # 更新按钮
         self.update_cookie_btn = ctk.CTkButton(right_column, text="🔄 更新Cookie",
                                               command=self.start_update_cookie,
@@ -867,7 +856,6 @@ class MainWindowCTK(ctk.CTk):
     def start_update_cookie(self):
         """启动更新Cookie的任务"""
         account = self.cookie_account_combo.get()
-        browser = self.cookie_browser_combo.get()
 
         if not account or account == "无账号":
             messagebox.showwarning("警告", "请选择一个有效账号！")
@@ -878,7 +866,7 @@ class MainWindowCTK(ctk.CTk):
 
         # 在后台线程中执行任务
         def task():
-            self.worker.run_update_cookie(account, browser)
+            self.worker.run_update_cookie(account)
 
         threading.Thread(target=task, daemon=True).start()
 
