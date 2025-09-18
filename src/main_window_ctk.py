@@ -864,11 +864,45 @@ class MainWindowCTK(ctk.CTk):
         self.update_cookie_btn.configure(state="disabled")
         self.log_text.delete("1.0", "end")
 
+        # 创建进度条
+        self.progress_frame = ctk.CTkFrame(self.tab_account)
+        self.progress_frame.pack(fill="x", padx=20, pady=10)
+        
+        self.progress_label = ctk.CTkLabel(self.progress_frame, text="准备更新Cookie...")
+        self.progress_label.pack(pady=5)
+        
+        self.progress_bar = ctk.CTkProgressBar(self.progress_frame)
+        self.progress_bar.pack(fill="x", padx=20, pady=5)
+        self.progress_bar.set(0)
+
         # 在后台线程中执行任务
         def task():
-            self.worker.run_update_cookie(account)
+            def progress_callback(step, total, message):
+                # 在主线程中更新UI
+                self.after(0, lambda: self.update_progress_ui(step, total, message))
+            
+            self.worker.run_update_cookie(account, progress_callback)
 
         threading.Thread(target=task, daemon=True).start()
+
+    def update_progress_ui(self, step, total, message):
+        """更新进度条UI（在主线程中调用）"""
+        if hasattr(self, 'progress_bar') and hasattr(self, 'progress_label'):
+            progress = step / total
+            self.progress_bar.set(progress)
+            self.progress_label.configure(text=message)
+            
+            # 如果完成，延迟移除进度条
+            if step >= total:
+                self.after(2000, self.remove_progress_ui)
+
+    def remove_progress_ui(self):
+        """移除进度条UI"""
+        if hasattr(self, 'progress_frame'):
+            self.progress_frame.destroy()
+            delattr(self, 'progress_frame')
+            delattr(self, 'progress_bar')
+            delattr(self, 'progress_label')
 
     def browse_download_path(self):
         """浏览下载保存路径"""

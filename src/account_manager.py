@@ -19,16 +19,25 @@ console = Console()
 
 class AccountManager:
     """负责管理和读取 accounts.json 文件中的账号信息"""
-    def ensure_playwright_browsers(self):
-        """确保Playwright浏览器已安装，特别优化了PyInstaller打包环境下的兼容性"""
+    def ensure_playwright_browsers(self, progress_callback=None):
+        """确保Playwright浏览器已安装，特别优化了PyInstaller打包环境下的兼容性
+        
+        参数:
+            progress_callback: 进度回调函数，接收(step, total, message)参数
+        """
+        def update_progress(step, total, message):
+            if progress_callback:
+                progress_callback(step, total, message)
+            console.print(f"[cyan]{message}[/cyan]")
+        
         try:
-            console.print(f"[cyan]开始检查Playwright浏览器状态...[/cyan]")
+            update_progress(1, 10, "开始检查Playwright浏览器状态...")
             console.print(f"[cyan]当前环境: {'打包环境 (MEIPASS)' if hasattr(sys, '_MEIPASS') else '开发环境'}[/cyan]")
             console.print(f"[cyan]Python解释器: {sys.executable}[/cyan]")
             
             # 确保不会跳过浏览器下载
             os.environ.pop('PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD', None)
-            console.print(f"[cyan]PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: {'已移除' if 'PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD' not in os.environ else os.environ['PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD']}[/cyan]")
+            update_progress(2, 10, "配置环境变量...")
             
             # 设置浏览器路径环境变量，如果runtime hook没有设置
             if 'PLAYWRIGHT_BROWSERS_PATH' not in os.environ:
@@ -45,6 +54,7 @@ class AccountManager:
                 console.print(f"[cyan]已存在的PLAYWRIGHT_BROWSERS_PATH: {os.environ['PLAYWRIGHT_BROWSERS_PATH']}[/cyan]")
             
             # 尝试启动Playwright来检查浏览器是否可用
+            update_progress(3, 10, "检查现有浏览器...")
             try:
                 import asyncio
                 loop = asyncio.new_event_loop()
@@ -67,27 +77,29 @@ class AccountManager:
                 
                 result = loop.run_until_complete(check_playwright())
                 if result:
+                    update_progress(10, 10, "浏览器检查完成，已可用！")
                     return True
             except Exception as e:
                 console.print(f"[yellow]Playwright初始化异常: {e}[/yellow]")
             
             # 如果浏览器不可用，尝试安装
-            console.print("[yellow]检测到Playwright浏览器未安装或不可用，正在自动安装...[/yellow]")
+            update_progress(4, 10, "浏览器未安装，开始自动安装...")
             
             # 尝试多种安装方法
             install_methods = [
-                {"name": "标准Playwright安装", "method": self._install_playwright_standard},
-                {"name": "备用Playwright安装", "method": self._install_playwright_alternative},
-                {"name": "系统Python安装", "method": self._install_playwright_system_python}
+                {"name": "标准Playwright安装", "method": self._install_playwright_standard, "step": 5},
+                {"name": "备用Playwright安装", "method": self._install_playwright_alternative, "step": 6},
+                {"name": "系统Python安装", "method": self._install_playwright_system_python, "step": 7}
             ]
             
             for method_info in install_methods:
                 try:
-                    console.print(f"[cyan]尝试{method_info['name']}...[/cyan]")
-                    success = method_info['method']()
+                    update_progress(method_info["step"], 10, f"尝试{method_info['name']}...")
+                    success = method_info['method'](progress_callback)
                     if success:
                         console.print(f"[green]{method_info['name']}成功！[/green]")
                         # 安装成功后，验证浏览器是否可用
+                        update_progress(8, 10, "验证安装结果...")
                         try:
                             import asyncio
                             loop = asyncio.new_event_loop()
@@ -99,9 +111,10 @@ class AccountManager:
                                     return os.path.exists(browser_path)
                             
                             if loop.run_until_complete(verify_playwright()):
+                                update_progress(10, 10, "Playwright浏览器安装并验证成功！")
                                 return True
                             else:
-                                console.print(f"[red]安装成功但浏览器文件不存在: {browser_path}[/red]")
+                                console.print(f"[red]安装成功但浏览器文件不存在[/red]")
                                 continue
                         except Exception as e:
                             console.print(f"[red]安装成功但验证失败: {e}[/red]")
@@ -111,17 +124,21 @@ class AccountManager:
                     continue
             
             # 如果所有安装方法都失败
+            update_progress(9, 10, "自动安装失败，检查系统浏览器...")
             console.print("[red]所有安装方法都失败了！[/red]")
-            console.print("[yellow]提示: 请尝试手动运行 'python -m playwright install chromium' 命令[/yellow]")
             
             # 作为最后的备选，直接使用系统Chrome浏览器（如果有）
             if self._has_system_chrome():
                 console.print("[green]检测到系统已安装Chrome浏览器，可以直接使用！[/green]")
+                update_progress(10, 10, "将使用系统Chrome浏览器")
                 return True
             
+            update_progress(10, 10, "安装失败，需要手动安装")
+            console.print("[yellow]提示: 请尝试手动运行 'python -m playwright install chromium' 命令[/yellow]")
             return False
             
         except Exception as e:
+            update_progress(10, 10, f"安装过程出错: {str(e)}")
             console.print(f"[red]检查或安装Playwright浏览器时出错: {e}[/red]")
             # 记录详细错误信息到临时文件以便调试
             try:
@@ -138,14 +155,24 @@ class AccountManager:
                 pass
             return False
 
-    def _install_playwright_standard(self):
-        """标准的Playwright安装方法"""
+    def _install_playwright_standard(self, progress_callback=None):
+        """标准的Playwright安装方法
+        
+        参数:
+            progress_callback: 进度回调函数，接收(step, total, message)参数
+        """
+        def update_progress(message):
+            if progress_callback:
+                progress_callback(5, 10, message)
+            console.print(f"[cyan]{message}[/cyan]")
+        
         # 构建安装命令参数
         install_args = ["-m", "playwright", "install", "chromium"]
+        use_cmd = False
         
         # 根据不同环境选择Python解释器
         if hasattr(sys, '_MEIPASS'):
-            console.print("[cyan]在打包环境中，寻找合适的Python解释器...[/cyan]")
+            update_progress("在打包环境中，寻找合适的Python解释器...")
             
             # 首先尝试使用系统Python
             if platform.system() == 'Darwin':  # macOS
@@ -195,11 +222,12 @@ class AccountManager:
         progress_chars = ["|", "/", "-", "\\"]
         progress_index = 0
         
+        update_progress("开始下载Playwright浏览器...")
         for line in process.stdout:
             # 检查是否包含进度信息
             if "downloading" in line.lower() or "extracting" in line.lower():
                 progress_index = (progress_index + 1) % len(progress_chars)
-                console.print(f"  [cyan]{progress_chars[progress_index]} {line.strip()}[/cyan]", end="\r")
+                update_progress(f"{progress_chars[progress_index]} {line.strip()}")
             else:
                 console.print(f"  [gray]{line.strip()}[/gray]")
         
@@ -208,8 +236,19 @@ class AccountManager:
         
         return process.returncode == 0
 
-    def _install_playwright_alternative(self):
-        """备用的Playwright安装方法，使用pip install playwright"""
+    def _install_playwright_alternative(self, progress_callback=None):
+        """备用的Playwright安装方法，使用pip install playwright
+        
+        参数:
+            progress_callback: 进度回调函数，接收(step, total, message)参数
+        """
+        def update_progress(message):
+            if progress_callback:
+                progress_callback(6, 10, message)
+            console.print(f"[cyan]{message}[/cyan]")
+        
+        update_progress("尝试备用安装方法...")
+        
         # 在Windows上使用cmd执行
         if platform.system() == 'Windows':
             process = subprocess.Popen(
@@ -229,6 +268,7 @@ class AccountManager:
                 bufsize=1
             )
         
+        update_progress("安装playwright包...")
         # 显示安装进度
         for line in process.stdout:
             console.print(f"  [gray]{line.strip()}[/gray]")
@@ -256,6 +296,7 @@ class AccountManager:
                 bufsize=1
             )
         
+        update_progress("下载浏览器文件...")
         # 显示安装进度
         for line in process.stdout:
             console.print(f"  [gray]{line.strip()}[/gray]")
@@ -264,8 +305,19 @@ class AccountManager:
         
         return process.returncode == 0
 
-    def _install_playwright_system_python(self):
-        """使用系统Python安装Playwright"""
+    def _install_playwright_system_python(self, progress_callback=None):
+        """使用系统Python安装Playwright
+        
+        参数:
+            progress_callback: 进度回调函数，接收(step, total, message)参数
+        """
+        def update_progress(message):
+            if progress_callback:
+                progress_callback(7, 10, message)
+            console.print(f"[cyan]{message}[/cyan]")
+        
+        update_progress("尝试使用系统Python安装...")
+        
         # 获取系统Python路径
         system_python_paths = []
         
@@ -293,7 +345,7 @@ class AccountManager:
         # 尝试使用每个系统Python路径
         for python_exe in system_python_paths:
             try:
-                console.print(f"[cyan]尝试使用系统Python: {python_exe}[/cyan]")
+                update_progress(f"尝试使用系统Python: {python_exe}")
                 
                 if platform.system() == 'Windows':
                     process = subprocess.Popen(
@@ -319,11 +371,13 @@ class AccountManager:
                 process.wait(timeout=300)
                 
                 if process.returncode == 0:
+                    update_progress(f"系统Python安装成功！使用了 {python_exe}")
                     return True
             except Exception as e:
                 console.print(f"[red]使用{python_exe}失败: {e}[/red]")
                 continue
         
+        console.print("[red]所有系统Python路径都尝试失败[/red]")
         return False
 
     def _has_system_chrome(self):
@@ -463,12 +517,13 @@ class AccountManager:
             print(f"获取Cookie时发生错误: {e}")
             return False
 
-    def update_cookie_with_playwright(self, username: str) -> bool:
+    def update_cookie_with_playwright(self, username: str, progress_callback=None) -> bool:
         """
         使用Playwright登录抖音并更新Cookie
         
         参数:
             username: 账号名称
+            progress_callback: 进度回调函数，接收(step, total, message)参数
             
         返回:
             bool: 是否成功更新Cookie
@@ -479,7 +534,7 @@ class AccountManager:
             return False
         
         # 确保Playwright浏览器已安装
-        if not self.ensure_playwright_browsers():
+        if not self.ensure_playwright_browsers(progress_callback):
             print(f"错误：未能确保Playwright浏览器可用，无法为账号 '{username}' 更新Cookie！")
             return False
         

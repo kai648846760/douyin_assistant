@@ -119,8 +119,13 @@ class WorkerCTK:
         if callable(self.finished_callback):
             self.finished_callback("info", "下载任务已停止")
     
-    def run_update_cookie(self, account_name: str):
-        """运行更新Cookie任务 - 仅使用Playwright方式"""
+    def run_update_cookie(self, account_name: str, progress_callback=None):
+        """运行更新Cookie任务 - 仅使用Playwright方式
+        
+        参数:
+            account_name: 账号名称
+            progress_callback: 进度回调函数，接收(step, total, message)参数
+        """
         try:
             self.is_stopping = False
             
@@ -131,7 +136,7 @@ class WorkerCTK:
             
             # 始终使用Playwright方式更新Cookie
             self.log(f"开始使用Playwright为账号 '{account_name}' 登录抖音并更新Cookie...")
-            success = self.account_manager.update_cookie_with_playwright(account_name)
+            success = self.account_manager.update_cookie_with_playwright(account_name, progress_callback)
             
             if success:
                 self.log(f"账号 '{account_name}' 的Cookie更新成功")
