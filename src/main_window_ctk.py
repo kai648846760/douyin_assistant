@@ -104,6 +104,9 @@ class MainWindowCTK(ctk.CTk):
         
         # 初始化屏幕适配参数
         self.setup_screen_adaptation()
+        
+        # 初始化布局更新标志
+        self._updating_layout = False
 
         # 设置窗口属性 - 响应式设计
         self.title("🎬 抖音全能助手 - 现代化版本 by Loki Wang")
