@@ -5,6 +5,7 @@
 
 from .worker_ctk import WorkerCTK
 from .account_manager import AccountManager
+from .runtime_config import RuntimeConfig
 import os
 import sys
 import threading
@@ -588,6 +589,21 @@ class MainWindowCTK(ctk.CTk):
         process_options_frame = ctk.CTkFrame(video_card, fg_color="transparent")
         process_options_frame.pack(fill="x", padx=self.adaptive_padding, pady=(10, 5))
         
+        # 模拟上传模式（dry-run）复选框
+        self.dry_run_var = ctk.StringVar(value="1")  # 默认启用dry-run
+        dry_run_checkbox = ctk.CTkCheckBox(
+            process_options_frame,
+            text="🔧 模拟上传模式 (推荐)",
+            variable=self.dry_run_var,
+            onvalue="1",
+            offvalue="0",
+            font=ctk.CTkFont(size=self.adaptive_normal_font),
+            fg_color=("#3b82f6", "#2563eb"),
+            hover_color=("#60a5fa", "#3b82f6"),
+            text_color=("#f59e0b", "#fbbf24")
+        )
+        dry_run_checkbox.pack(side="left", padx=(0, 20), fill="y")
+        
         # 启用视频处理的复选框
         self.process_videos_var = ctk.StringVar(value="0")  # 0表示禁用，1表示启用
         process_checkbox = ctk.CTkCheckBox(
@@ -1090,13 +1106,32 @@ class MainWindowCTK(ctk.CTk):
         # 获取视频处理相关参数
         process_videos = self.process_videos_var.get() == "1"
         frame_delete_ratio = self.frame_delete_ratio.get()
+        dry_run = self.dry_run_var.get() == "1"  # 获取dry-run设置
+        
+        # 验证运行模式（dry-run/真实上传）
+        try:
+            resolved_dry_run = RuntimeConfig.resolve_upload_mode(dry_run)
+        except PermissionError as exc:
+            messagebox.showerror("上传受限", str(exc))
+            self.dry_run_var.set("1")
+            self.upload_btn.configure(state="normal")
+            return
+
+        if resolved_dry_run and not dry_run:
+            self.dry_run_var.set("1")
+            messagebox.showinfo(
+                "已切换为模拟上传",
+                "当前环境禁止真实上传，系统已自动切换为模拟模式 (Dry-Run)。")
+
+        dry_run = resolved_dry_run
         
         # 在后台线程中执行任务
         def task():
             self.worker.run_batch_upload(
                 selected_accounts, selected_videos, tags,
                 process_videos=process_videos,
-                frame_delete_ratio=frame_delete_ratio)
+                frame_delete_ratio=frame_delete_ratio,
+                dry_run=dry_run)
 
         threading.Thread(target=task, daemon=True).start()
 

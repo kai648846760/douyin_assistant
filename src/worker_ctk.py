@@ -18,8 +18,10 @@ sys.path.insert(0, str(project_root))
 try:
     from src.account_manager import AccountManager
     from src.uploader import Uploader
+    from src.dry_run_uploader import DryRunUploader
     from src.downloader import Downloader
     from src.video_processor import VideoProcessor
+    from src.runtime_config import RuntimeConfig
 except ImportError as e:
     print(f"导入错误: {e}")
     # 如果导入失败，创建占位符类
@@ -30,11 +32,15 @@ except ImportError as e:
     class Uploader:
         def __init__(self, *args, **kwargs):
             pass
-    
+
+    class DryRunUploader:
+        def __init__(self, *args, **kwargs):
+            pass
+
     class Downloader:
         def __init__(self, *args, **kwargs):
             pass
-    
+
     class VideoProcessor:
         def __init__(self):
             pass
@@ -44,6 +50,20 @@ except ImportError as e:
         
         def cleanup_temp_file(self, file_path):
             pass
+
+    class RuntimeConfig:
+        @classmethod
+        def resolve_upload_mode(cls, requested):
+            return True
+
+        @classmethod
+        def get_capabilities(cls):
+            return {'playwright': False}
+
+        @classmethod
+        def get_capability_guidance(cls, capability):
+            return False, ""
+
 
 class WorkerCTK:
     """CustomTkinter版本的后台工作线程，完整保留所有原始功能"""
@@ -288,21 +308,44 @@ class WorkerCTK:
         except Exception as e:
             raise Exception(f"执行下载命令时发生错误: {str(e)}")
     
-    def run_single_upload(self, account_name: str, video_path: str, tags: List[str] = None):
+    def run_single_upload(self, account_name: str, video_path: str, tags: List[str] = None, dry_run: bool = None):
         """运行单个视频上传任务"""
         processed_video_path = None
         try:
             self.is_stopping = False
             self.log(f"开始上传视频 '{os.path.basename(video_path)}' 到账号 '{account_name}'...")
             
-            # 获取账号信息
+            try:
+                is_dry_run = RuntimeConfig.resolve_upload_mode(dry_run)
+            except PermissionError as exc:
+                self.log(f"错误: {exc}")
+                if callable(self.finished_callback):
+                    self.finished_callback("error", str(exc))
+                return
+            
             account_info = self.account_manager.get_account(account_name)
             if not account_info:
-                raise Exception(f"账号 '{account_name}' 不存在")
+                if is_dry_run:
+                    self.log(f"警告: 账号 '{account_name}' 不存在，模拟模式将继续执行")
+                else:
+                    raise Exception(f"账号 '{account_name}' 不存在")
             
-            user_data_dir = account_info.get('user_data_dir')
-            if not user_data_dir or not os.path.isdir(user_data_dir):
-                raise Exception(f"账号 '{account_name}' 没有配置有效的用户数据目录")
+            user_data_dir = account_info.get('user_data_dir') if account_info else None
+            
+            if is_dry_run:
+                if not user_data_dir:
+                    self.log(f"提示: 账号 '{account_name}' 未配置用户数据目录，模拟上传将跳过浏览器会话")
+                if account_info and not account_info.get('cookie'):
+                    self.log(f"提示: 账号 '{account_name}' 未配置 Cookie")
+                self.log(">>> 运行在模拟模式 (DRY-RUN)，不会执行真实上传 <<<")
+            else:
+                if not user_data_dir or not os.path.isdir(user_data_dir):
+                    raise Exception(f"账号 '{account_name}' 没有配置有效的用户数据目录")
+                capabilities = RuntimeConfig.get_capabilities()
+                if not capabilities.get('playwright'):
+                    _, guidance = RuntimeConfig.get_capability_guidance('playwright')
+                    raise Exception(guidance)
+                self.log(">>> 运行在真实上传模式 <<<")
             
             # 处理视频（如果启用）
             if self.process_videos:
@@ -314,17 +357,16 @@ class WorkerCTK:
                     self.log(f"视频处理失败，使用原始视频继续: {str(e)}")
                     processed_video_path = None
             
-            # 使用处理后的视频或原始视频
             upload_video_path = processed_video_path if processed_video_path else video_path
             
-            # 动态创建uploader实例
-            uploader = Uploader(user_data_dir)
+            if is_dry_run:
+                uploader = DryRunUploader(user_data_dir, log_callback=self.log)
+            else:
+                uploader = Uploader(user_data_dir)
             
-            # 解析视频标题和标签
             video_name = os.path.basename(video_path)
             title = os.path.splitext(video_name)[0]
             
-            # 使用uploader模块执行上传
             result = uploader.upload_video(upload_video_path, title, tags or [])
             
             if result:
@@ -340,15 +382,13 @@ class WorkerCTK:
             if callable(self.finished_callback):
                 self.finished_callback("error", error_msg)
         finally:
-            # 清理临时文件
             if processed_video_path:
                 try:
                     self.video_processor.cleanup_temp_file(processed_video_path)
                 except Exception as e:
                     self.log(f"清理临时文件失败: {str(e)}")
-                    # 继续执行，不中断流程
     
-    def run_batch_upload(self, account_names: List[str], video_paths: List[str], common_tags: List[str] = None, process_videos=False, frame_delete_ratio=0.1):
+    def run_batch_upload(self, account_names: List[str], video_paths: List[str], common_tags: List[str] = None, process_videos=False, frame_delete_ratio=0.1, dry_run: bool = None):
         """运行批量上传任务"""
         try:
             self.is_stopping = False
@@ -356,25 +396,45 @@ class WorkerCTK:
             total_accounts = len(account_names)
             total_tasks = total_videos * total_accounts
             
+            try:
+                is_dry_run = RuntimeConfig.resolve_upload_mode(dry_run)
+            except PermissionError as exc:
+                self.log(f"错误: {exc}")
+                if callable(self.finished_callback):
+                    self.finished_callback("error", str(exc))
+                return
+            
             self.log(f"开始批量上传任务: {total_videos} 个视频 × {total_accounts} 个账号 = {total_tasks} 个任务")
             
-            # 记录视频处理设置
             if process_videos:
                 self.log(f"已启用视频帧处理，删除比例: {int(frame_delete_ratio * 100)}%")
             else:
                 self.log("未启用视频帧处理")
             
-            # 验证所有账号
             valid_accounts = []
             for account_name in account_names:
                 account_info = self.account_manager.get_account(account_name)
                 if not account_info:
-                    self.log(f"警告: 账号 '{account_name}' 不存在，跳过")
-                    continue
+                    if is_dry_run:
+                        self.log(f"警告: 账号 '{account_name}' 不存在，将在模拟模式下跳过浏览器依赖")
+                        valid_accounts.append(account_name)
+                        continue
+                    else:
+                        self.log(f"警告: 账号 '{account_name}' 不存在，跳过")
+                        continue
                 
                 user_data_dir = account_info.get('user_data_dir')
                 if not user_data_dir or not os.path.isdir(user_data_dir):
-                    self.log(f"警告: 账号 '{account_name}' 没有配置有效的用户数据目录，跳过")
+                    if is_dry_run:
+                        self.log(f"警告: 账号 '{account_name}' 未配置有效的用户数据目录，模拟模式将继续")
+                        valid_accounts.append(account_name)
+                        continue
+                    else:
+                        self.log(f"警告: 账号 '{account_name}' 没有配置有效的用户数据目录，跳过")
+                        continue
+                
+                if not account_info.get('cookie') and not is_dry_run:
+                    self.log(f"警告: 账号 '{account_name}' 缺少 Cookie，跳过")
                     continue
                 
                 valid_accounts.append(account_name)
@@ -382,9 +442,11 @@ class WorkerCTK:
             if not valid_accounts:
                 raise Exception("没有有效的上传账号")
             
-            self.log(f"有效账号: {', '.join(valid_accounts)}")
+            if is_dry_run:
+                self.log(f"将在模拟模式下使用以下账号执行任务: {', '.join(valid_accounts)}")
+            else:
+                self.log(f"有效账号: {', '.join(valid_accounts)}")
             
-            # 执行批量上传
             success_count = 0
             failed_count = 0
             
@@ -396,57 +458,36 @@ class WorkerCTK:
                 video_name = os.path.basename(video_path)
                 self.log(f"\n处理视频 {i}/{total_videos}: {video_name}")
                 
-                # 解析视频文件名中的标签
                 video_tags = self._parse_video_tags(video_name)
                 all_tags = (common_tags or []) + video_tags
                 
-                video_uploaded = False
                 for j, account_name in enumerate(valid_accounts, 1):
-                    if self.is_stopping or video_uploaded:
+                    if self.is_stopping:
                         break
                     
                     self.log(f"  上传到账号 {j}/{len(valid_accounts)}: {account_name}")
                     
+                    current_process_videos = self.process_videos
+                    current_frame_delete_ratio = self.frame_delete_ratio
+                    
+                    self.process_videos = process_videos
+                    self.frame_delete_ratio = frame_delete_ratio
+                    
                     try:
-                        # 保存当前的视频处理设置
-                        current_process_videos = self.process_videos
-                        current_frame_delete_ratio = self.frame_delete_ratio
-                        
-                        # 设置本次上传的视频处理参数
-                        self.process_videos = process_videos
-                        self.frame_delete_ratio = frame_delete_ratio
-                        
-                        # 调用run_single_upload方法来利用现有的视频处理功能
-                        result = self.run_single_upload(account_name, video_path, all_tags)
-                        
-                        # 恢复原来的设置
-                        self.process_videos = current_process_videos
-                        self.frame_delete_ratio = current_frame_delete_ratio
-                        
-                        if result:
-                            success_count += 1
-                            self.log(f"  ✓ 成功上传到 {account_name}")
-                            video_uploaded = True  # 视频已上传成功，不需要尝试其他账号
-                        else:
-                            failed_count += 1
-                            self.log(f"  ✗ 上传到 {account_name} 失败")
-                        
+                        self.run_single_upload(account_name, video_path, all_tags, dry_run=is_dry_run)
                     except Exception as e:
                         failed_count += 1
                         self.log(f"  ✗ 上传到 {account_name} 时发生错误: {str(e)}")
-                        # 恢复原来的设置
+                    finally:
                         self.process_videos = current_process_videos
                         self.frame_delete_ratio = current_frame_delete_ratio
                     
-                    # 添加延迟避免过于频繁的操作
-                    if not self.is_stopping and j < len(valid_accounts) and not video_uploaded:
+                    if not self.is_stopping and j < len(valid_accounts):
                         time.sleep(2)
                 
-                # 视频间的延迟
                 if not self.is_stopping and i < total_videos:
                     time.sleep(3)
             
-            # 任务完成总结
             if not self.is_stopping:
                 summary = f"批量上传完成: 成功 {success_count} 个，失败 {failed_count} 个"
                 self.log(f"\n{summary}")
