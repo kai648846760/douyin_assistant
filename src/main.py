@@ -12,6 +12,8 @@ from rich import print as rprint
 from .account_manager import AccountManager
 from .downloader import Downloader
 from .uploader import Uploader
+from .dry_run_uploader import DryRunUploader
+from .runtime_config import RuntimeConfig
 
 console = Console()
 account_manager = AccountManager()
@@ -22,6 +24,9 @@ def print_welcome_message():
 
 def main():
     print_welcome_message()
+    missing_capabilities = RuntimeConfig.get_missing_capabilities_message()
+    if missing_capabilities:
+        console.print(Panel(f"[bold yellow]环境检查提示[/bold yellow]\n{missing_capabilities}", border_style="yellow"))
     parser = argparse.ArgumentParser(description="抖音全能助手 - 自动管理账号，轻松爬取与发布。")
     subparsers = parser.add_subparsers(dest="command", help="选择一个命令", required=True)
 
@@ -51,13 +56,17 @@ def main():
     parser_upload.add_argument("-p", "--video_path", required=True, help="本地视频文件的完整路径。")
     parser_upload.add_argument("-t", "--title", required=True, help="视频的标题或描述。")
     parser_upload.add_argument("--tags", default="", help="视频标签，多个标签用逗号分隔。")
-    parser_upload.set_defaults(func=upload_command)
+    parser_upload.add_argument("--dry-run", action="store_true", default=None, help="模拟上传，不执行真实操作（推荐）。")
+    parser_upload.add_argument("--live", dest="dry_run", action="store_false", help=argparse.SUPPRESS)
+    parser_upload.set_defaults(func=upload_command, dry_run=None)
     
     parser_batch_upload = subparsers.add_parser("batch-upload", help="批量上传指定目录下的所有视频。")
     parser_batch_upload.add_argument("-a", "--account", required=True, help="用于上传的抖音账号用户名。")
     parser_batch_upload.add_argument("-d", "--dir_path", required=True, help="包含视频文件的目录路径。")
     parser_batch_upload.add_argument("--tags", default="", help="为所有视频添加的通用标签。")
-    parser_batch_upload.set_defaults(func=batch_upload_command)
+    parser_batch_upload.add_argument("--dry-run", action="store_true", default=None, help="模拟上传，不执行真实操作（推荐）。")
+    parser_batch_upload.add_argument("--live", dest="dry_run", action="store_false", help=argparse.SUPPRESS)
+    parser_batch_upload.set_defaults(func=batch_upload_command, dry_run=None)
 
     args = parser.parse_args()
     args.func(args)
@@ -77,13 +86,62 @@ def download_command(args):
     elif args.mode == 'favorite': downloader.download_from_favorite()
     elif args.mode == 'collection': downloader.download_from_collection(args.url)
 
-def common_upload_logic(account_name, func):
+def common_upload_logic(account_name, func, dry_run=None):
+    try:
+        is_dry_run = RuntimeConfig.resolve_upload_mode(dry_run)
+    except PermissionError as exc:
+        console.print(f"[bold red]错误: {exc}[/bold red]")
+        return
+
     account_info = account_manager.get_account(account_name)
-    if not account_info: console.print(f"[bold red]上传失败: 指定账号 '{account_name}' 不存在。[/bold red]"); return
-    user_data_dir = account_info.get('user_data_dir')
-    if not user_data_dir: console.print(f"[bold red]错误: 账号 '{account_name}' 未配置 'user_data_dir'。[/bold red]"); return
-    
-    uploader = Uploader(user_data_dir)
+    if not account_info:
+        if is_dry_run:
+            console.print(
+                f"[bold yellow]警告: 账号 '{account_name}' 尚未在配置中创建，模拟模式将继续执行。[/bold yellow]\n"
+                f"提示: 可通过命令添加账号 -> python -m src.main add-account -u {account_name}"
+            )
+        else:
+            console.print(
+                f"[bold red]上传失败: 账号 '{account_name}' 不存在。[/bold red]\n"
+                f"[bold yellow]提示: 请先运行 'python -m src.main add-account -u {account_name}' 添加账号。[/bold yellow]"
+            )
+            return
+
+    user_data_dir = account_info.get('user_data_dir') if account_info else None
+    cookie_available = bool(account_info.get('cookie')) if account_info else False
+
+    if is_dry_run:
+        if not user_data_dir:
+            console.print(
+                f"[bold yellow]提示: 账号 '{account_name}' 未配置用户数据目录，模拟上传将跳过浏览器会话。[/bold yellow]"
+            )
+        if not cookie_available:
+            console.print(
+                f"[bold yellow]提示: 账号 '{account_name}' 未配置 Cookie。真实上传前请执行 'python -m src.main cookie -a {account_name}' 或在 GUI 中登录。[/bold yellow]"
+            )
+        console.print("[bold cyan]>>> 运行在模拟模式 (DRY-RUN)，不会执行真实上传 <<<[/bold cyan]")
+        uploader = DryRunUploader(user_data_dir)
+    else:
+        if not user_data_dir:
+            console.print(
+                f"[bold red]错误: 账号 '{account_name}' 未配置有效的 'user_data_dir'。[/bold red]\n"
+                "提示: 请先执行 cookie 更新或在 GUI 中登录以生成用户数据目录。"
+            )
+            return
+        if not cookie_available:
+            console.print(
+                f"[bold red]错误: 账号 '{account_name}' 未配置 Cookie。[/bold red]\n"
+                "提示: 请运行 'python -m src.main cookie -a {account_name}' 或在 GUI 中使用账号管理进行登录。"
+            )
+            return
+        capabilities = RuntimeConfig.get_capabilities()
+        if not capabilities.get('playwright'):
+            _, guidance = RuntimeConfig.get_capability_guidance('playwright')
+            console.print(f"[bold red]错误: {guidance}[/bold red]")
+            return
+        console.print("[bold yellow]>>> 运行在真实上传模式 <<<[/bold yellow]")
+        uploader = Uploader(user_data_dir)
+
     try:
         page = uploader.start_session()
         func(uploader, page)
@@ -91,14 +149,25 @@ def common_upload_logic(account_name, func):
         uploader.end_session()
 
 def upload_command(args):
+    if args.dry_run is None:
+        console.print("[bold red]真实上传已被禁用。请添加 --dry-run 参数以执行模拟上传。[/bold red]")
+        console.print(RuntimeConfig.get_real_upload_block_message())
+        return
+
     def do_upload(uploader, page):
         tags = [t.strip() for t in args.tags.split(',') if t.strip()] if args.tags else []
         success = uploader.upload_single_video(page, args.video_path, args.title, tags)
         if success: console.print("[bold green]\n单视频发布任务已成功完成。[/bold green]")
         else: console.print("[bold red]\n单视频发布任务失败。[/bold red]")
-    common_upload_logic(args.account, do_upload)
+
+    common_upload_logic(args.account, do_upload, dry_run=args.dry_run)
 
 def batch_upload_command(args):
+    if args.dry_run is None:
+        console.print("[bold red]真实上传已被禁用。请添加 --dry-run 参数以执行模拟上传。[/bold red]")
+        console.print(RuntimeConfig.get_real_upload_block_message())
+        return
+
     if not os.path.isdir(args.dir_path): console.print(f"[bold red]错误: 路径 '{args.dir_path}' 不是有效目录。[/bold red]"); return
     video_files = [f for f in os.listdir(args.dir_path) if f.lower().endswith(VIDEO_EXTENSIONS)]
     if not video_files: console.print(f"[bold yellow]目录 '{args.dir_path}' 中无视频文件。[/bold yellow]"); return
@@ -120,7 +189,8 @@ def batch_upload_command(args):
             if i < len(video_files) - 1:
                 console.print("[yellow]暂停10秒，准备下一个任务...[/yellow]"); time.sleep(10)
         console.print(Panel(f"[bold]批量上传任务完成！\n成功: {success_count} 个\n失败: {fail_count} 个[/bold]", border_style="green"))
-    common_upload_logic(args.account, do_batch_upload)
+
+    common_upload_logic(args.account, do_batch_upload, dry_run=args.dry_run)
 
 if __name__ == "__main__":
     main()

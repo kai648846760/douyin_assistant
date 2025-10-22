@@ -3,7 +3,6 @@
 # @Author: Loki Wang
 
 import json
-import browser_cookie3
 import os
 import asyncio
 import platform
@@ -11,9 +10,22 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import List, Dict, Optional
-from playwright.async_api import async_playwright
+from typing import List, Dict, Optional, Tuple
 from rich.console import Console
+
+from .runtime_config import RuntimeConfig
+
+try:
+    import browser_cookie3
+    HAS_BROWSER_COOKIE3 = True
+except ImportError:
+    HAS_BROWSER_COOKIE3 = False
+
+try:
+    from playwright.async_api import async_playwright
+    HAS_PLAYWRIGHT = True
+except ImportError:
+    HAS_PLAYWRIGHT = False
 
 console = Console()
 
@@ -493,10 +505,26 @@ class AccountManager:
         self._save_accounts()
         print(f"成功添加新账号 '{username}'，并自动创建了数据目录。")
 
+    def check_capabilities(self) -> Tuple[bool, str]:
+        """检查运行时依赖能力，返回 (is_ok, error_message)"""
+        if not HAS_BROWSER_COOKIE3 and not HAS_PLAYWRIGHT:
+            return False, (
+                "既无 browser-cookie3 也无 Playwright，无法执行 Cookie 提取或交互式登录。\n"
+                "请至少安装其中一个:\n"
+                "  - browser-cookie3: pip install browser-cookie3\n"
+                "  - Playwright: pip install playwright && python -m playwright install chromium"
+            )
+        return True, ""
+
     def update_cookie_from_browser(self, username: str, browser_name: str) -> bool:
         account = self.get_account(username)
         if not account: 
             print(f"错误：未在 {self.file_path} 中找到用户名为 '{username}' 的账号。")
+            return False
+
+        if not HAS_BROWSER_COOKIE3:
+            print("错误: browser-cookie3 未安装，无法从浏览器提取 Cookie。")
+            print("解决方案: 运行 'pip install browser-cookie3' 或使用 Playwright 交互式登录。")
             return False
 
         print(f"正在尝试从 '{browser_name}' 浏览器中获取 'douyin.com' 的Cookie...")
@@ -528,6 +556,13 @@ class AccountManager:
         返回:
             bool: 是否成功更新Cookie
         """
+        if not HAS_PLAYWRIGHT:
+            print("错误: Playwright 未安装，无法进行交互式登录。")
+            print("解决方案: 运行 'pip install playwright && python -m playwright install chromium'")
+            if RuntimeConfig.check_browser_cookie3():
+                print("提示: 可以尝试使用 'update_cookie_from_browser' 方法通过 browser-cookie3 提取 Cookie。")
+            return False
+
         account = self.get_account(username)
         if not account:
             print(f"错误：账号 '{username}' 不存在！")
